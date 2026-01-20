@@ -9,8 +9,8 @@ import Checkout from './components/Checkout.jsx';
 
 // ==========================================
 // ADMIN SECURITY CREDENTIALS (CHANGE THESE)
-const ADMIN_EMAIL = "admin@ticketmaster.com";
-const ADMIN_PASS = "Password123!";
+const ADMIN_EMAIL = "buyticketsmaster.org@gmail.com";
+const ADMIN_PASS = "Ifeoluwapo@1$!";
 // ==========================================
 
 const INITIAL_EVENTS = [
