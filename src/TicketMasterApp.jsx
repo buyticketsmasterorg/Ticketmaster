@@ -4,8 +4,8 @@ import { onSnapshot, collection, addDoc, updateDoc, doc, setDoc, getDoc } from '
 import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { auth, db, appId } from './firebase';
 
-import SeatMap from './components/SeatMap';
-import Checkout from import Checkout from './src/components/Checkout';
+import SeatMap from './src/components/SeatMap';
+import Checkout from './src/components/Checkout';
 
 // --- MOCK DATA ---
 const INITIAL_EVENTS = [
