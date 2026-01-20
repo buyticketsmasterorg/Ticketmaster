@@ -5,7 +5,7 @@ import { signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'fi
 import { auth, db, appId } from './firebase';
 
 import SeatMap from './components/SeatMap';
-import Checkout from './components/Checkout';
+import Checkout from import Checkout from './src/components/Checkout';
 
 // --- MOCK DATA ---
 const INITIAL_EVENTS = [
