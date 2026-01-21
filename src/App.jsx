@@ -4,15 +4,18 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
 
-// --- IMPORT YOUR EXISTING COMPONENTS ---
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
 
-// --- FIREBASE SETUP ---
-// Ensure your environment variables are set in Cloudflare Pages
-const firebaseConfig = JSON.parse(import.meta.env.VITE_FIREBASE_CONFIG || '{}'); 
-// If you are using the old setup in your file, keep that. 
-// But Cloudflare uses import.meta.env.VITE_...
+// --- FIREBASE SETUP (UPDATED FOR YOUR VARIABLES) ---
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
+};
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -62,7 +65,11 @@ export default function App() {
   useEffect(() => {
     const initAuth = async () => {
         // Simple anonymous sign in
-        await signInAnonymously(auth);
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error("Auth Error:", error);
+        }
     };
     initAuth();
     return onAuthStateChanged(auth, setUser);
@@ -580,4 +587,3 @@ function SuccessScreen({ event, cart, onHome }) {
     </div>
   );
 }
-
