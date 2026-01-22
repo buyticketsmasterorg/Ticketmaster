@@ -1,204 +1,145 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, CheckCircle, Info, Lock, Star, ShieldCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { ChevronLeft, Info, ShoppingCart } from 'lucide-react';
 
-export default function SeatMap({ event, presaleCode, cart, setCart, globalPrice, onCheckout }) {
-  const [viewState, setViewState] = useState('overview');
-  const [isLocked, setIsLocked] = useState(event?.status === 'presale');
-  const [enteredCode, setEnteredCode] = useState('');
-  const [clickAttempts, setClickAttempts] = useState(0); 
-  const [fakeSoldSeats, setFakeSoldSeats] = useState([]);
-  const [toast, setToast] = useState(null);
+export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout }) {
+  const [view, setView] = useState('stadium'); // 'stadium' or 'section'
+  const [selectedSection, setSelectedSection] = useState(null);
 
-  // PHANTOM TAKER ENGINE: Randomly sells seats every 3-5 seconds
-  useEffect(() => {
-    if (isLocked) return;
-    const interval = setInterval(() => {
-       const randomRow = Math.floor(Math.random() * 8) + 1;
-       const randomCol = Math.floor(Math.random() * 12) + 1;
-       const seatId = `s-${randomRow}-${randomCol}`;
-       setFakeSoldSeats(prev => [...new Set([...prev, seatId])]);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [isLocked]);
+  // Define Sections: Floor, Lower Bowl, Upper Bowl
+  const sections = [
+    { id: 'floor', name: 'Floor A', color: 'bg-blue-600', price: globalPrice * 2 },
+    { id: '101', name: 'Sec 101', color: 'bg-indigo-500', price: globalPrice * 1.5 },
+    { id: '102', name: 'Sec 102', color: 'bg-indigo-500', price: globalPrice * 1.5 },
+    { id: '103', name: 'Sec 103', color: 'bg-indigo-500', price: globalPrice * 1.5 },
+    { id: '201', name: 'Sec 201', color: 'bg-purple-500', price: globalPrice },
+    { id: '202', name: 'Sec 202', color: 'bg-purple-500', price: globalPrice },
+    { id: '203', name: 'Sec 203', color: 'bg-purple-500', price: globalPrice },
+  ];
 
-  const handleSeatClick = (seatData) => {
-    if (fakeSoldSeats.includes(seatData.id)) return;
-
-    // Simulate "Someone else got it" for first few interactions
-    if (clickAttempts < 2) {
-       setFakeSoldSeats(prev => [...prev, seatData.id]);
-       setClickAttempts(prev => prev + 1);
-       showToast("SORRY! ANOTHER FAN BEAT YOU TO THESE SEATS.", "error");
-       return;
-    }
-
-    const exists = cart.find(s => s.id === seatData.id);
-    if (exists) {
-      setCart(cart.filter(s => s.id !== seatData.id));
-    } else {
-      if (cart.length >= 8) return;
-      setCart([...cart, seatData]);
-    }
+  const addToCart = (seatLabel, price) => {
+    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
   };
-
-  const showToast = (msg, type) => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const unlock = () => {
-    if (enteredCode === presaleCode) {
-      setIsLocked(false);
-      showToast("ACCESS GRANTED. VERIFIED FAN STATUS CONFIRMED.", "success");
-    } else {
-      showToast("INVALID PRESALE CODE. CONTACT SUPPORT.", "error");
-    }
-  };
-
-  const totalPrice = cart.reduce((acc, item) => acc + item.price, 0);
-
-  const renderFloor = () => {
-    let rows = [];
-    for (let r = 1; r <= 8; r++) {
-      let seats = [];
-      for (let c = 1; c <= 12; c++) {
-        const id = `s-${r}-${c}`;
-        const isSelected = cart.find(s => s.id === id);
-        const isSold = fakeSoldSeats.includes(id) || (r + c) % 9 === 0;
-        const isVIP = r < 3;
-        const isResale = (r + c) % 13 === 0;
-        const price = isVIP ? globalPrice * 2.5 : isResale ? globalPrice * 1.4 : globalPrice;
-        
-        seats.push(
-          <div 
-            key={id}
-            onClick={() => !isSold && handleSeatClick({ id, row: r, seat: c, section: 'Floor', price })}
-            className={`w-9 h-9 md:w-11 md:h-11 rounded-full cursor-pointer flex items-center justify-center text-[10px] font-black transition-all border-2 relative
-              ${isSelected ? 'bg-green-500 border-green-700 text-white scale-110 shadow-[0_0_20px_rgba(34,197,94,0.5)]' : 
-                isSold ? 'bg-gray-200 border-gray-200 cursor-not-allowed opacity-30 text-transparent' : 
-                isVIP ? 'bg-gradient-to-br from-amber-300 to-amber-500 border-amber-600 text-amber-950 shadow-lg' : 
-                isResale ? 'bg-gradient-to-br from-pink-400 to-pink-600 border-pink-700 text-white shadow-lg' : 
-                'bg-gradient-to-br from-[#026cdf] to-blue-700 border-blue-800 text-white hover:scale-110'}
-            `}
-          >
-            {isSelected ? <CheckCircle className="w-6 h-6" /> : !isSold && `${c}`}
-          </div>
-        );
-      }
-      rows.push(<div key={r} className="flex gap-2 justify-center">{seats}</div>);
-    }
-    return (
-      <div className="bg-white p-12 rounded-[60px] shadow-[0_60px_120px_rgba(0,0,0,0.15)] space-y-4 animate-slideUp overflow-x-auto min-w-full relative border-8 border-white">
-        <div className="bg-gradient-to-b from-[#1f262d] to-black text-white text-center py-10 font-black tracking-[2em] text-sm mb-20 rounded-[40px] shadow-2xl border-b-[12px] border-black/30 flex items-center justify-center">
-          STAGE
-        </div>
-        <div className="space-y-4 pb-10">{rows}</div>
-      </div>
-    );
-  };
-
-  if (isLocked) return (
-    <div className="min-h-[85vh] flex items-center justify-center p-6 bg-[#f1f5f9]">
-      <div className="bg-white w-full max-w-sm rounded-[60px] shadow-[0_50px_120px_rgba(0,0,0,0.1)] p-12 border border-white text-center space-y-10 animate-slideUp">
-        <div className="w-24 h-24 bg-blue-50 rounded-[40px] flex items-center justify-center mx-auto shadow-inner"><Lock className="text-[#026cdf] w-12 h-12" /></div>
-        <div className="space-y-3">
-          <h2 className="text-4xl font-black tracking-tighter">Event Locked</h2>
-          <p className="text-gray-400 text-[11px] font-black uppercase tracking-widest leading-relaxed">Identity verification required to access verified floor seating inventory.</p>
-        </div>
-        <input 
-          className="w-full border-4 border-gray-50 p-6 rounded-[35px] text-center font-black tracking-[0.4em] uppercase text-3xl focus:border-[#026cdf] focus:bg-blue-50/20 outline-none transition-all shadow-inner" 
-          placeholder="CODE" 
-          value={enteredCode} 
-          onChange={e=>setEnteredCode(e.target.value.toUpperCase())} 
-        />
-        <div className="bg-gray-50 p-5 rounded-[30px] border border-gray-100">
-           <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] leading-relaxed">No code? Our Live Chat agents are standing by to verify your fan status in real-time.</p>
-        </div>
-        <button onClick={unlock} className="w-full bg-[#026cdf] text-white py-6 rounded-[30px] font-black shadow-[0_20px_50px_rgba(2,108,223,0.3)] hover:scale-[1.03] active:scale-95 transition-all uppercase tracking-widest">
-          Join Presale
-        </button>
-      </div>
-    </div>
-  );
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col bg-[#f1f5f9] relative overflow-hidden">
-      {/* Dynamic Toast */}
-      {toast && (
-        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-[100] px-12 py-5 rounded-full shadow-[0_30px_60px_rgba(0,0,0,0.3)] font-black flex items-center gap-4 animate-bounce ${toast.type === 'error' ? 'bg-[#ea0042] text-white' : 'bg-green-600 text-white'}`}>
-          <Info className="w-6 h-6" /> {toast.msg}
+    <div className="animate-fadeIn pb-20">
+      {/* Top Bar Info */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+           <h2 className="text-2xl lg:text-4xl font-black italic uppercase tracking-tighter text-white">Select Seats</h2>
+           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{event?.venue}</p>
+        </div>
+        <div className="bg-[#026cdf] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+           <ShoppingCart className="w-4 h-4 text-white" />
+           <span className="font-black text-white">{cart.length}</span>
+        </div>
+      </div>
+
+      {/* --- STADIUM VIEW (LEVEL 1) --- */}
+      {view === 'stadium' && (
+        <div className="relative w-full max-w-3xl mx-auto aspect-square bg-[#1f262d] rounded-full border-4 border-white/5 shadow-2xl p-8 flex flex-col items-center justify-center overflow-hidden">
+           
+           {/* STAGE */}
+           <div className="absolute top-10 w-1/2 h-24 bg-gray-800 rounded-lg flex items-center justify-center border-b-4 border-[#ea0042] shadow-[0_0_50px_rgba(234,0,66,0.3)]">
+              <span className="text-gray-500 font-black uppercase tracking-[0.5em] text-xs">Stage</span>
+           </div>
+
+           {/* FLOOR */}
+           <button 
+             onClick={() => { setView('section'); setSelectedSection(sections[0]); }}
+             className="mt-20 w-1/2 h-1/3 bg-blue-900/40 border-2 border-blue-500/50 rounded-xl hover:bg-blue-600 hover:scale-105 transition-all flex items-center justify-center group"
+           >
+              <span className="font-black text-blue-300 uppercase tracking-widest group-hover:text-white">Floor A</span>
+           </button>
+
+           {/* LOWER BOWL (Semi-Circle) */}
+           <div className="absolute inset-x-8 bottom-32 flex justify-between gap-4">
+              <button onClick={() => { setView('section'); setSelectedSection(sections[1]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-lg hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">101</span></button>
+              <button onClick={() => { setView('section'); setSelectedSection(sections[2]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-lg hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">102</span></button>
+              <button onClick={() => { setView('section'); setSelectedSection(sections[3]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-lg hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">103</span></button>
+           </div>
+
+           {/* UPPER BOWL */}
+           <div className="absolute inset-x-4 bottom-8 flex justify-between gap-2">
+              <button onClick={() => { setView('section'); setSelectedSection(sections[4]); }} className="flex-1 h-16 bg-purple-900/40 border-2 border-purple-500/50 rounded-lg hover:bg-purple-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-purple-300">201</span></button>
+              <button onClick={() => { setView('section'); setSelectedSection(sections[5]); }} className="flex-1 h-16 bg-purple-900/40 border-2 border-purple-500/50 rounded-lg hover:bg-purple-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-purple-300">202</span></button>
+              <button onClick={() => { setView('section'); setSelectedSection(sections[6]); }} className="flex-1 h-16 bg-purple-900/40 border-2 border-purple-500/50 rounded-lg hover:bg-purple-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-purple-300">203</span></button>
+           </div>
+           
+           <p className="absolute bottom-4 text-[9px] text-gray-500 font-bold uppercase tracking-widest">Tap a section to zoom</p>
         </div>
       )}
 
-      <div className="bg-gradient-to-r from-[#ea0042] to-[#c40038] text-white text-[10px] py-2 text-center font-black tracking-[0.3em] uppercase animate-pulse shadow-2xl z-20">
-         URGENT: YOU ARE CURRENTLY 1 OF 6,842 FANS COMPETING FOR THESE TICKETS.
-      </div>
+      {/* --- ZOOMED SECTION VIEW (LEVEL 2) --- */}
+      {view === 'section' && selectedSection && (
+        <div className="animate-slideUp">
+           <button onClick={() => setView('stadium')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors">
+              <ChevronLeft className="w-4 h-4" /> Back to Stadium
+           </button>
+           
+           <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl">
+              <div className="flex justify-between items-end mb-8 border-b border-gray-100 pb-4">
+                 <div>
+                    <h3 className="text-3xl font-black italic uppercase tracking-tighter">{selectedSection.name}</h3>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Standard Admission</p>
+                 </div>
+                 <div className="text-right">
+                    <p className="text-3xl font-black text-[#026cdf]">${selectedSection.price}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Per Ticket</p>
+                 </div>
+              </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-14 pb-48">
-        <div className="max-w-7xl mx-auto space-y-12">
-          {viewState === 'overview' ? (
-            <div className="bg-white p-14 rounded-[70px] shadow-[0_80px_150px_rgba(0,0,0,0.15)] border-8 border-white text-center animate-slideUp">
-              <div className="flex flex-wrap justify-center gap-5 mb-12">
-                <div className="flex items-center gap-2 bg-amber-50 px-5 py-2.5 rounded-full border border-amber-200 text-amber-600 text-[11px] font-black shadow-sm"><Star className="w-4 h-4 fill-current" /> VIP PLATINUM</div>
-                <div className="flex items-center gap-2 bg-pink-50 px-5 py-2.5 rounded-full border border-pink-200 text-pink-600 text-[11px] font-black shadow-sm"><Ticket className="w-4 h-4" /> VERIFIED RESALE</div>
-                <div className="flex items-center gap-2 bg-blue-50 px-5 py-2.5 rounded-full border border-blue-200 text-[#026cdf] text-[11px] font-black shadow-sm"><ShieldCheck className="w-4 h-4" /> SECURE ACCESS</div>
+              {/* SEAT GRID (Scrollable on Mobile) */}
+              <div className="overflow-x-auto pb-4">
+                 <div className="min-w-[500px] grid grid-cols-10 gap-3 justify-center">
+                    {[...Array(60)].map((_, i) => {
+                       const row = String.fromCharCode(65 + Math.floor(i / 10)); // Row A, B, C...
+                       const num = (i % 10) + 1;
+                       const label = `${selectedSection.name} • Row ${row}-${num}`;
+                       const isSelected = cart.find(c => c.label === label);
+                       
+                       return (
+                          <button 
+                            key={i} 
+                            disabled={isSelected}
+                            onClick={() => addToCart(label, selectedSection.price)}
+                            className={`
+                              w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-black transition-all border-2
+                              ${isSelected 
+                                ? 'bg-gray-300 border-gray-300 text-gray-500 cursor-not-allowed' 
+                                : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}
+                            `}
+                          >
+                             {row}{num}
+                          </button>
+                       )
+                    })}
+                 </div>
               </div>
-              
-              <div className="space-y-4 mb-16">
-                <h2 className="text-5xl md:text-7xl font-black tracking-tighter uppercase italic text-gray-900 leading-none">{event?.artist}</h2>
-                <p className="text-gray-400 font-black uppercase tracking-[0.3em] text-sm">{event?.venue} • {event?.date}</p>
-              </div>
-              
-              <div 
-                onClick={() => setViewState('zoomed')} 
-                className="w-full max-w-2xl mx-auto aspect-video bg-gradient-to-br from-blue-50 to-blue-100/50 border-4 border-dashed border-[#026cdf] rounded-[70px] flex flex-col items-center justify-center cursor-pointer hover:scale-[1.02] transition-all shadow-inner relative group"
-              >
-                <div className="absolute top-0 w-64 h-10 bg-black rounded-b-[30px] shadow-2xl font-black text-[11px] text-white flex items-center justify-center tracking-[0.6em] border-b-4 border-black/40">STAGE</div>
-                
-                <div className="bg-white px-12 py-8 rounded-[45px] shadow-[0_30px_70px_rgba(0,0,0,0.12)] border-2 border-blue-50 flex flex-col items-center group-hover:shadow-blue-500/30 transition-all duration-500">
-                   <span className="font-black text-[#026cdf] text-4xl tracking-tighter italic">FLOOR SEATS</span>
-                   <span className="text-[11px] font-black text-gray-400 mt-3 uppercase tracking-[0.4em]">Tap to zoom into section</span>
-                </div>
 
-                <div className="absolute bottom-6 flex gap-2 animate-bounce">
-                   <div className="w-2 h-2 bg-[#026cdf] rounded-full" />
-                   <div className="w-2 h-2 bg-[#026cdf]/50 rounded-full" />
-                   <div className="w-2 h-2 bg-[#026cdf]/20 rounded-full" />
-                </div>
+              <div className="mt-8 bg-gray-50 p-6 rounded-2xl flex items-center justify-between">
+                 <div className="flex items-center gap-3">
+                    <Info className="w-5 h-5 text-gray-400" />
+                    <p className="text-xs font-bold text-gray-500">Zoom/Pan enabled for precision selection.</p>
+                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="animate-fadeIn">
-              <button 
-                onClick={() => setViewState('overview')} 
-                className="mb-10 text-[#026cdf] font-black text-[11px] flex items-center gap-3 bg-white px-8 py-4 rounded-full shadow-2xl uppercase tracking-[0.3em] border-2 border-gray-50 hover:scale-105 active:scale-95 transition-all"
-              >
-                <ChevronLeft className="w-5 h-5" /> Back to Stadium
-              </button>
-              {renderFloor()}
-            </div>
-          )}
+           </div>
         </div>
-      </div>
+      )}
 
-      {/* Sticky Bottom Bar */}
-      <div className="h-32 bg-white/95 backdrop-blur-xl border-t-2 border-gray-50 p-8 fixed bottom-0 w-full shadow-[0_-30px_80px_rgba(0,0,0,0.2)] flex items-center justify-between z-[50]">
-        <div className="space-y-1">
-          <p className="text-[12px] text-gray-400 font-black uppercase tracking-[0.3em] leading-none">{cart.length} Seats Locked in Cart</p>
-          <p className="text-5xl font-black text-gray-900 tracking-tighter leading-none">${totalPrice.toFixed(2)}</p>
-          <div className="flex gap-2 items-center mt-2">
-             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-             <p className="text-[10px] text-green-600 font-black uppercase tracking-widest">Holding for 4:59</p>
-          </div>
-        </div>
-        <button 
-          onClick={onCheckout} 
-          disabled={cart.length === 0} 
-          className={`px-20 py-6 rounded-[35px] font-black text-white shadow-[0_20px_50px_rgba(2,108,223,0.4)] transition-all uppercase tracking-[0.2em] text-xl italic ${cart.length > 0 ? 'bg-[#026cdf] hover:bg-blue-700 hover:scale-[1.05] active:scale-95' : 'bg-gray-200 cursor-not-allowed opacity-50'}`}
-        >
-          Checkout
-        </button>
-      </div>
+      {/* --- CHECKOUT BAR (Visible when cart has items) --- */}
+      {cart.length > 0 && (
+         <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
+               <div>
+                  <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total</p>
+                  <p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p>
+               </div>
+               <button onClick={onCheckout} className="bg-[#026cdf] text-white px-10 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">
+                  Proceed to Pay
+               </button>
+            </div>
+         </div>
+      )}
     </div>
   );
 }
