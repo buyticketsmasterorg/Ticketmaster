@@ -43,7 +43,7 @@ export default function App() {
   
   // Mobile Polish & Search
   const [searchTerm, setSearchTerm] = useState('');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   // Auth State
   const [tempUser, setTempUser] = useState({ email: '', name: '' });
@@ -135,33 +135,52 @@ export default function App() {
       
       {/* --- HEADER (MOBILE OPTIMIZED) --- */}
       <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 z-20">
            {currentPage !== 'home' && (
              <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all">
                <ChevronLeft className="w-5 h-5" />
              </button>
            )}
-           <div className="flex items-center gap-1" onClick={() => setCurrentPage('home')}>
+           <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}>
               <span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span>
               <CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" />
            </div>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <div className="flex items-center gap-4">
+        {/* Mobile Search Toggle */}
+        <div className="flex items-center gap-2 lg:gap-4 z-20">
            {currentPage === 'home' && (
-             <div className="hidden md:flex relative group">
-                <input 
-                  className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-64 focus:w-80 transition-all outline-none focus:bg-white focus:text-black"
-                  placeholder="Search events..." 
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                />
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
-             </div>
+             <>
+               <button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white">
+                  <Search className="w-5 h-5" />
+               </button>
+               {/* Desktop Search */}
+               <div className="hidden lg:flex relative group">
+                  <input 
+                    className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-64 focus:w-80 transition-all outline-none focus:bg-white focus:text-black"
+                    placeholder="Search events..." 
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                  />
+                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
+               </div>
+             </>
            )}
            <button onClick={() => setCurrentPage('admin')}><User className="w-5 h-5 text-gray-400 hover:text-white transition-colors" /></button>
         </div>
+
+        {/* Mobile Search Bar Dropdown */}
+        {showMobileSearch && currentPage === 'home' && (
+           <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10">
+              <input 
+                autoFocus
+                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none"
+                placeholder="Search..." 
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+           </div>
+        )}
       </header>
 
       {/* --- NOTIFICATION TOAST --- */}
@@ -209,7 +228,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- SIMPLIFIED LOGIN FLOW (No Code, Direct Entry) --- */}
+        {/* --- SIMPLIFIED LOGIN FLOW (Direct Entry) --- */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 lg:p-12 rounded-[40px] shadow-2xl animate-slideUp space-y-8">
@@ -301,7 +320,7 @@ export default function App() {
 
       </main>
 
-      {/* --- LIVE CHAT WIDGET (FIXED POSITION) --- */}
+      {/* --- LIVE CHAT WIDGET --- */}
       <div className="fixed bottom-6 right-6 z-[200]">
          <button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
            {isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}
