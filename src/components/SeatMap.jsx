@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, Info, ShoppingCart, AlertTriangle, Monitor } from 'lucide-react';
 
-export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout }) {
+export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, onCheckout }) {
   const [view, setView] = useState('stadium'); 
   const [selectedSection, setSelectedSection] = useState(null);
   
@@ -9,18 +9,19 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
   const [failCount, setFailCount] = useState(0);
   const [flashMsg, setFlashMsg] = useState('');
 
+  // Define Blocks with separate prices
   const sections = [
-    { id: 'floor-a', name: 'Floor A (VIP)', color: 'bg-[#026cdf]', price: globalPrice * 3, isVip: true, type: 'floor' },
-    { id: 'floor-b', name: 'Floor B', color: 'bg-[#026cdf]', price: globalPrice * 2, type: 'floor' },
-    { id: 'floor-c', name: 'Floor C', color: 'bg-[#026cdf]', price: globalPrice * 2, type: 'floor' },
-    { id: '101', name: 'Sec 101', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-left' },
-    { id: '102', name: 'Sec 102', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-left' },
-    { id: '103', name: 'Sec 103', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-left' },
-    { id: '104', name: 'Sec 104', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-right' },
-    { id: '105', name: 'Sec 105', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-right' },
-    { id: '106', name: 'Sec 106', color: 'bg-[#374151]', price: globalPrice * 1.5, type: 'side-right' },
-    { id: '201', name: 'Sec 201', color: 'bg-[#4b5563]', price: globalPrice, type: 'back' },
-    { id: '202', name: 'Sec 202', color: 'bg-[#4b5563]', price: globalPrice, type: 'back' },
+    { id: 'floor-a', name: 'Floor A (VIP)', color: 'bg-[#026cdf]', price: vipPrice, isVip: true, type: 'floor' },
+    { id: 'floor-b', name: 'Floor B', color: 'bg-[#026cdf]', price: regularPrice * 2, type: 'floor' }, // B is usually premium
+    { id: 'floor-c', name: 'Floor C', color: 'bg-[#026cdf]', price: regularPrice * 2, type: 'floor' },
+    { id: '101', name: 'Sec 101', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
+    { id: '102', name: 'Sec 102', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
+    { id: '103', name: 'Sec 103', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
+    { id: '104', name: 'Sec 104', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
+    { id: '105', name: 'Sec 105', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
+    { id: '106', name: 'Sec 106', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
+    { id: '201', name: 'Sec 201', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
+    { id: '202', name: 'Sec 202', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
   ];
 
   const handleSeatClick = (seatLabel, price) => {
