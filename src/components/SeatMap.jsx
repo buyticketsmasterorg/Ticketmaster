@@ -1,27 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Info, ShoppingCart } from 'lucide-react';
+import { ChevronLeft, Info, ShoppingCart, AlertTriangle } from 'lucide-react';
 
 export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout }) {
   const [view, setView] = useState('stadium'); 
   const [selectedSection, setSelectedSection] = useState(null);
-  const [soldSeats, setSoldSeats] = useState([]); // Array of indexes that are "Sold"
-  const [isPanicMode, setIsPanicMode] = useState(false);
+  
+  // Panic State: 'idle', 'all-grey', 'partial-grey', 'flicker'
+  const [panicState, setPanicState] = useState('idle');
+  const [failCount, setFailCount] = useState(0);
+  const [flashMsg, setFlashMsg] = useState('');
 
-  // --- PANIC MODE LOGIC (Simulates Seats Selling Out) ---
-  useEffect(() => {
-    if (view === 'section') {
-      const interval = setInterval(() => {
-        // Randomly pick a seat index (0-99) to mark as "Sold"
-        const randomSeat = Math.floor(Math.random() * 100);
-        setSoldSeats(prev => [...prev, randomSeat]);
-      }, 500); // Every 0.5 seconds, a seat "sells"
-      return () => clearInterval(interval);
-    } else {
-      setSoldSeats([]); // Reset when leaving section
-    }
-  }, [view]);
-
-  // Define Sections with VIP logic
+  // Sections with VIP Pink
   const sections = [
     { id: 'floor', name: 'Floor VIP', color: 'bg-pink-600', border: 'border-pink-400', price: globalPrice * 3, isVip: true },
     { id: '101', name: 'Sec 101', color: 'bg-indigo-600', border: 'border-indigo-400', price: globalPrice * 1.5 },
@@ -32,13 +21,44 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
     { id: '203', name: 'Sec 203', color: 'bg-blue-600', border: 'border-blue-400', price: globalPrice },
   ];
 
-  const addToCart = (seatLabel, price) => {
-    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
+  // --- THE STRUGGLE LOGIC ---
+  const handleSeatClick = (seatLabel, price) => {
+    // If we are in panic mode, do nothing or show error
+    if (panicState !== 'idle') return;
+
+    // Trigger the Panic Sequence
+    setPanicState('all-grey'); // 1. Turn ALL GREY immediately
+    
+    // 2. Wait 3 seconds
+    setTimeout(() => {
+        setPanicState('partial-grey'); // 3. Return some seats
+        
+        // 4. Wait 1 second then Grey again (Flicker)
+        setTimeout(() => {
+            setPanicState('all-grey');
+            
+            // 5. Finally normalize
+            setTimeout(() => {
+                setPanicState('idle');
+                
+                // 6. Check if user "won" the seat (Fail 5 times)
+                if (failCount < 5) {
+                    setFailCount(prev => prev + 1);
+                    setFlashMsg("Sorry! Another fan beat you to this seat.");
+                    setTimeout(() => setFlashMsg(''), 2000);
+                } else {
+                    // Success!
+                    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
+                }
+            }, 1500);
+        }, 800);
+    }, 3000);
   };
 
   return (
     <div className="animate-fadeIn pb-32">
-      {/* Top Bar Info & Legend */}
+      
+      {/* --- HEADER & LEGEND --- */}
       <div className="flex flex-col gap-4 mb-8">
         <div className="flex items-center justify-between">
             <div>
@@ -52,26 +72,26 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
         </div>
         
         {/* LEGEND */}
-        <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[#026cdf]" /> Available</div>
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899]" /> VIP</div>
-           <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-gray-600" /> Sold</div>
+        <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-white/5 p-3 rounded-xl w-fit">
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#026cdf] border border-white/20" /> Available</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-pink-500 shadow-[0_0_10px_#ec4899]" /> VIP</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-gray-600" /> Sold</div>
         </div>
       </div>
 
-      {/* --- STADIUM OVERVIEW (LEVEL 1 - THE OVAL) --- */}
+      {/* --- STADIUM VIEW (LEVEL 1) --- */}
       {view === 'stadium' && (
         <div className="relative w-full max-w-lg mx-auto aspect-[4/3] bg-[#0f131a] rounded-[100px] border-4 border-white/10 shadow-2xl flex flex-col items-center justify-center overflow-hidden p-4">
            
-           {/* STAGE (Top) */}
+           {/* STAGE */}
            <div className="absolute top-0 w-2/3 h-24 bg-gray-800 rounded-b-3xl border-b-4 border-[#ea0042] flex items-center justify-center shadow-[0_10px_40px_rgba(234,0,66,0.2)] z-10">
               <span className="text-gray-500 font-black uppercase tracking-[0.5em] text-xs">Stage</span>
            </div>
 
-           {/* MAIN CONTAINER */}
+           {/* SECTIONS LAYOUT */}
            <div className="relative w-full h-full pt-20 flex flex-col items-center justify-center gap-4">
                
-               {/* FLOOR VIP (Center) */}
+               {/* FLOOR VIP */}
                <button 
                  onClick={() => { setView('section'); setSelectedSection(sections[0]); }}
                  className="w-1/2 h-32 bg-pink-900/30 border-2 border-pink-500/50 rounded-2xl hover:bg-pink-600 hover:scale-105 transition-all flex items-center justify-center group shadow-[0_0_30px_rgba(236,72,153,0.2)]"
@@ -79,14 +99,14 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
                   <span className="font-black text-pink-300 uppercase tracking-widest group-hover:text-white">Floor VIP</span>
                </button>
 
-               {/* LOWER BOWL (Ring) */}
+               {/* LOWER BOWL */}
                <div className="w-full px-8 flex justify-between gap-2">
                   <button onClick={() => { setView('section'); setSelectedSection(sections[1]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-xl hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">101</span></button>
                   <button onClick={() => { setView('section'); setSelectedSection(sections[2]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-xl hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">102</span></button>
                   <button onClick={() => { setView('section'); setSelectedSection(sections[3]); }} className="flex-1 h-20 bg-indigo-900/40 border-2 border-indigo-500/50 rounded-xl hover:bg-indigo-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-indigo-300">103</span></button>
                </div>
 
-               {/* UPPER BOWL (Bottom) */}
+               {/* UPPER BOWL */}
                <div className="w-full px-4 flex justify-between gap-1">
                   <button onClick={() => { setView('section'); setSelectedSection(sections[4]); }} className="flex-1 h-16 bg-blue-900/40 border-2 border-blue-500/50 rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-blue-300">201</span></button>
                   <button onClick={() => { setView('section'); setSelectedSection(sections[5]); }} className="flex-1 h-16 bg-blue-900/40 border-2 border-blue-500/50 rounded-lg hover:bg-blue-600 transition-all flex items-center justify-center"><span className="text-[10px] font-bold text-blue-300">202</span></button>
@@ -98,12 +118,22 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
 
       {/* --- ZOOMED SECTION VIEW (LEVEL 2) --- */}
       {view === 'section' && selectedSection && (
-        <div className="animate-slideUp">
+        <div className="animate-slideUp relative">
+           
+           {/* BACK BUTTON */}
            <button onClick={() => setView('stadium')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors">
               <ChevronLeft className="w-4 h-4" /> Return to Map
            </button>
            
-           <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl relative overflow-hidden">
+           {/* FAIL MESSAGE TOAST */}
+           {flashMsg && (
+             <div className="absolute top-0 left-0 w-full z-50 bg-[#ea0042] text-white p-4 rounded-xl font-bold uppercase tracking-widest text-center animate-bounce shadow-2xl">
+                <AlertTriangle className="w-5 h-5 inline-block mr-2" />
+                {flashMsg}
+             </div>
+           )}
+           
+           <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl relative overflow-hidden min-h-[500px]">
               {/* Header */}
               <div className="flex justify-between items-end mb-8 border-b border-gray-100 pb-4 relative z-10">
                  <div>
@@ -116,7 +146,7 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
                  </div>
               </div>
 
-              {/* SEAT GRID with Panic Logic */}
+              {/* SEAT GRID */}
               <div className="overflow-x-auto pb-4 relative z-10">
                  <div className="min-w-[300px] grid grid-cols-8 gap-2 sm:gap-3 justify-center">
                     {[...Array(80)].map((_, i) => {
@@ -125,17 +155,28 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
                        const label = `${selectedSection.name} • Row ${row}-${num}`;
                        
                        const isSelected = cart.find(c => c.label === label);
-                       const isSold = soldSeats.includes(i); // Simulating sold out
+                       
+                       // VISUAL LOGIC:
+                       // 1. If panicState is 'all-grey', EVERYTHING is grey
+                       // 2. If panicState is 'partial-grey', RANDOM 70% is grey
+                       let isVisualGrey = false;
+                       
+                       if (panicState === 'all-grey') {
+                           isVisualGrey = true;
+                       } else if (panicState === 'partial-grey') {
+                           // Pseudo-random based on index to keep it consistent during render
+                           if (i % 3 !== 0) isVisualGrey = true; 
+                       }
 
                        return (
                           <button 
                             key={i} 
-                            disabled={isSelected || isSold}
-                            onClick={() => addToCart(label, selectedSection.price)}
+                            disabled={isSelected || isVisualGrey}
+                            onClick={() => handleSeatClick(label, selectedSection.price)}
                             className={`
                               w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-[9px] font-black transition-all border-2
-                              ${isSold 
-                                ? 'bg-gray-300 border-gray-300 text-gray-400 cursor-not-allowed scale-90' // Sold style
+                              ${isVisualGrey
+                                ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' // Panic Grey Style
                                 : isSelected 
                                    ? 'bg-black border-black text-white cursor-not-allowed' 
                                    : selectedSection.isVip 
@@ -143,17 +184,24 @@ export default function SeatMap({ event, globalPrice, cart, setCart, onCheckout 
                                       : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}
                             `}
                           >
-                             {!isSold && num}
+                             {!isVisualGrey && num}
                           </button>
                        )
                     })}
                  </div>
               </div>
+              
+              {/* Panic Overlay (Optional Extra Visual) */}
+              {panicState === 'all-grey' && (
+                  <div className="absolute inset-0 bg-gray-500/10 pointer-events-none z-0 flex items-center justify-center">
+                      <p className="text-gray-900/20 font-black text-6xl uppercase -rotate-12">Sold Out</p>
+                  </div>
+              )}
            </div>
         </div>
       )}
 
-      {/* --- CHECKOUT BAR (Updated Style) --- */}
+      {/* --- CHECKOUT BAR --- */}
       {cart.length > 0 && (
          <div className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
             <div className="max-w-7xl mx-auto flex items-center justify-between">
