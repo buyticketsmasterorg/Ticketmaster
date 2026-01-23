@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, Menu, LogIn, Check, Ban, AlertOctagon, Info, Settings, Calendar, Trash2, Clock } from 'lucide-react';
+import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, Menu, LogIn, Check, Ban, AlertOctagon, Info, Settings, Calendar, Trash2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot, query, where, orderBy, deleteDoc } from 'firebase/firestore';
@@ -21,7 +21,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
-// --- TRANSLATIONS ---
 const t = {
   EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You", presaleTitle: "Early Access", unlock: "Unlock", name: "Full Name", phone: "Mobile Number", email: "Email Address", pass: "Password", agree: "I agree to Terms", haveAcc: "Have Account?", noAcc: "Create Account" },
   ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante", presaleTitle: "Acceso Anticipado", unlock: "Desbloquear", name: "Nombre", phone: "Móvil", email: "Correo", pass: "Contraseña", agree: "Acepto", haveAcc: "¿Cuenta?", noAcc: "¿Crear?" },
@@ -74,8 +73,7 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, check session state but default to home
-            if(currentPage === 'auth') {
+            if (currentPage === 'auth') {
                 await findOrCreateSession(u);
                 setCurrentPage('home');
             } else {
@@ -123,7 +121,6 @@ export default function UserApp() {
         setSessionData(d);
         const msgs = d.chatHistory || [];
         setChatMessages(msgs);
-        // FIX: Only show red dot if messages > 1 (ignore Welcome msg) and chat closed
         if (msgs.length > 1 && msgs[msgs.length - 1].sender === 'system' && !isChatOpen) {
             setHasUnread(true);
         }
@@ -258,12 +255,26 @@ export default function UserApp() {
           </div>
         )}
 
+        {/* WAITING ROOM - DARK THEME & BACKGROUND */}
         {currentPage === 'waiting_room' && (
-           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn relative z-10">
-               {selectedEvent?.image && <div className="absolute inset-0 z-0 opacity-20"><img src={selectedEvent.image} className="w-full h-full object-cover blur-xl" /></div>}
+           <div className="fixed inset-0 z-50 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
+               {/* Background Image */}
+               {selectedEvent?.image && (
+                 <div className="absolute inset-0 z-0">
+                    <img src={selectedEvent.image} className="w-full h-full object-cover opacity-20 blur-xl scale-110" />
+                    <div className="absolute inset-0 bg-black/60" />
+                 </div>
+               )}
+               
                <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
-               <div className="space-y-2 z-10"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{txt?.holdTitle}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p></div>
-               <div className="bg-[#1f262d] p-6 rounded-2xl border border-white/10 max-w-sm z-10"><p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p><p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p></div>
+               <div className="space-y-2 z-10">
+                   <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
+                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p>
+               </div>
+               <div className="bg-[#1f262d] p-6 rounded-2xl border border-white/10 max-w-sm z-10 shadow-2xl">
+                   <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                   <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
+               </div>
            </div>
         )}
 
@@ -288,7 +299,7 @@ export default function UserApp() {
                    })}
                </div>
                <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.queueTitle}</p></div>
-               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#22c55e] transition-all duration-1000 shadow-[0_0_20px_#22c55e]" style={{ width: `${queueProgress}%` }} /></div>
+               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
            </div>
         )}
 
@@ -303,6 +314,7 @@ export default function UserApp() {
              <button onClick={() => setCurrentPage('home')} className="bg-[#1f262d] px-10 py-4 rounded-full font-black uppercase tracking-widest border border-white/20 hover:bg-white hover:text-black transition-colors">Return Home</button>
           </div>
         )}
+
       </main>
 
       {user && currentPage !== 'auth' && (
