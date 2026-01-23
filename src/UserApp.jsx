@@ -71,7 +71,7 @@ export default function UserApp() {
   const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
 
   // --- STABLE BACKGROUND SOURCE ---
-  // Hardcoded fallback included here to ensure image is always available
+  // Updated: High Opacity (100%) and Low Blur for maximum visibility
   const activeBackground = selectedEvent?.image || sessionStorage.getItem('active_bg') || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000";
 
   useEffect(() => {
@@ -261,7 +261,6 @@ export default function UserApp() {
       <main className={`min-h-screen ${
           currentPage === 'auth' ? 'bg-[#0a0e14]' : 
           currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
-          currentPage === 'queue' ? 'bg-[#0a0e14]' : 
           'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
       }`}>
         
@@ -269,8 +268,8 @@ export default function UserApp() {
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6 relative z-50">
                  <div className="text-center">
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? "Create Account" : "Welcome Back"}</h2>
-                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? "Verify Identity" : "Log in to enter"}</p>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? (txt?.verifyTitle || "Create Account") : (txt?.loginTitle || "Welcome Back")}</h2>
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? (txt?.verifySub || "Verify Identity") : (txt?.loginSub || "Log in to enter")}</p>
                  </div>
                  <div className="space-y-3">
                      {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
@@ -280,9 +279,9 @@ export default function UserApp() {
                  </div>
                  {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
                  <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-3">
-                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? "Join" : "Log In")}
+                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? (txt?.btnJoin || "Join") : (txt?.btnLogin || "Log In"))}
                  </button>
-                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? "Have Account?" : "Create Account"}</button></div>
+                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? (txt?.haveAcc || "Have Account?") : (txt?.noAcc || "Create Account")}</button></div>
               </div>
            </div>
         )}
@@ -297,26 +296,25 @@ export default function UserApp() {
           </div>
         )}
 
-        {/* WAITING ROOM (HIGH VISIBILITY BACKGROUND) */}
+        {/* WAITING ROOM - BRIGHTER BACKGROUND */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               {/* Background Image: INCREASED OPACITY (80%) */}
+               {/* Updated: Opacity 100% and reduced overlay to 20% for max visibility */}
                <div className="absolute inset-0 z-0">
                   <img 
                     src={activeBackground} 
-                    className="w-full h-full object-cover opacity-80 blur-[2px] scale-110" 
+                    className="w-full h-full object-cover opacity-100 scale-110 transition-transform duration-[20s] hover:scale-125" 
                   />
-                  {/* Reduced overlay opacity (40%) so image pops */}
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/40 to-black/40" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-[#0a0e14]/40 to-black/20" />
                </div>
                
                <div className="relative z-10 flex flex-col items-center space-y-8">
                    <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
                    <div className="space-y-2">
-                       <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow-lg">{txt?.holdTitle}</h2>
-                       <p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
+                       <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow-2xl">{txt?.holdTitle}</h2>
+                       <p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-lg">{txt?.holdSub}</p>
                    </div>
-                   <div className="bg-[#1f262d]/90 backdrop-blur-xl p-6 rounded-2xl border border-white/20 max-w-sm shadow-2xl">
+                   <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/20 max-w-sm shadow-2xl">
                        <p className="text-xs font-bold text-gray-300">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
                        <p className="text-xs font-bold text-gray-400 mt-2">Do not refresh.</p>
                    </div>
@@ -332,15 +330,15 @@ export default function UserApp() {
            </div>
         )}
 
-        {/* QUEUE - NOW HAS THE SAME BACKGROUND */}
+        {/* QUEUE - ALSO BRIGHTER BACKGROUND */}
         {currentPage === 'queue' && (
            <div className="fixed inset-0 z-40 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
                <div className="absolute inset-0 z-0">
                   <img 
                     src={activeBackground} 
-                    className="w-full h-full object-cover opacity-80 blur-md scale-110" 
+                    className="w-full h-full object-cover opacity-100 blur-sm scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/40 to-black/40" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-[#0a0e14]/40 to-black/20" />
                </div>
 
                <div className="relative z-10 w-full flex flex-col items-center gap-8">
