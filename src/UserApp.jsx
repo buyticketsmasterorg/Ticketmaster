@@ -67,9 +67,19 @@ export default function UserApp() {
   const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // Define txt early to prevent crashes
+  // Define txt & flags early
   const txt = t[lang] || t.EN;
   const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
+
+  // --- STABLE BACKGROUND SOURCE ---
+  const activeBackground = selectedEvent?.image || sessionStorage.getItem('active_bg') || INITIAL_EVENTS[0].image;
+
+  // Persist background to session storage
+  useEffect(() => {
+    if (selectedEvent?.image) {
+        sessionStorage.setItem('active_bg', selectedEvent.image);
+    }
+  }, [selectedEvent]);
 
   // --- RESTORE SELECTED EVENT ON REFRESH ---
   useEffect(() => {
@@ -87,8 +97,7 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, send to Home (skips auth)
-            if(currentPage === 'auth') {
+            if (currentPage === 'auth') {
                 await findOrCreateSession(u);
                 setCurrentPage('home');
             } else {
@@ -128,15 +137,15 @@ export default function UserApp() {
       }
   };
 
-  // --- AUTO-VERIFY (5 Seconds) - ONLY DB UPDATE ---
+  // --- AUTO-VERIFY (5 Seconds) ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
-        // Only update DB. Let the snapshot listener handle the redirect.
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), {
            accessGranted: 'allowed',
            status: 'in_queue'
         });
+        setCurrentPage('queue'); // Force move
       }, 5000);
       return () => clearTimeout(timer);
     }
@@ -257,7 +266,6 @@ export default function UserApp() {
       <main className={`min-h-screen ${
           currentPage === 'auth' ? 'bg-[#0a0e14]' : 
           currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
-          currentPage === 'queue' ? 'bg-[#0a0e14]' :
           'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
       }`}>
         
@@ -293,12 +301,12 @@ export default function UserApp() {
           </div>
         )}
 
+        {/* WAITING ROOM - FIXED */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               {/* Background Image: Hardcoded Crowd Image */}
                <div className="absolute inset-0 z-0">
                   <img 
-                    src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
+                    src={activeBackground} // USES STABLE SOURCE
                     className="w-full h-full object-cover opacity-50 blur-sm scale-110" 
                   />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-[#0a0e14]/80 to-black/60" />
@@ -308,11 +316,11 @@ export default function UserApp() {
                    <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
                    <div className="space-y-2">
                        <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
-                       <p className="text-sm font-bold text-gray-200 uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
+                       <p className="text-sm font-bold text-gray-400 uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
                    </div>
                    <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 max-w-sm shadow-2xl">
-                       <p className="text-xs font-bold text-gray-400">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
-                       <p className="text-xs font-bold text-gray-400 mt-2">Do not refresh.</p>
+                       <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                       <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
                    </div>
                </div>
            </div>
@@ -326,14 +334,11 @@ export default function UserApp() {
            </div>
         )}
 
-        {/* QUEUE PAGE - NOW HAS THE SAME BACKGROUND AS WAITING ROOM */}
         {currentPage === 'queue' && (
            <div className="fixed inset-0 z-40 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
-               
-               {/* Background Image Persistence */}
                <div className="absolute inset-0 z-0">
                   <img 
-                    src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
+                    src={activeBackground} // USES STABLE SOURCE
                     className="w-full h-full object-cover opacity-30 blur-md scale-110" 
                   />
                   <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
