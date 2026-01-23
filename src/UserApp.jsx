@@ -67,21 +67,19 @@ export default function UserApp() {
   const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // Define txt & flags early
   const txt = t[lang] || t.EN;
   const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
 
   // --- STABLE BACKGROUND SOURCE ---
-  const activeBackground = selectedEvent?.image || sessionStorage.getItem('active_bg') || INITIAL_EVENTS[0].image;
+  // Hardcoded fallback included here to ensure image is always available
+  const activeBackground = selectedEvent?.image || sessionStorage.getItem('active_bg') || "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000";
 
-  // Persist background to session storage
   useEffect(() => {
     if (selectedEvent?.image) {
         sessionStorage.setItem('active_bg', selectedEvent.image);
     }
   }, [selectedEvent]);
 
-  // --- RESTORE SELECTED EVENT ON REFRESH ---
   useEffect(() => {
     const savedId = sessionStorage.getItem('selectedEventId');
     if (savedId && eventsList.length > 0 && !selectedEvent) {
@@ -137,7 +135,6 @@ export default function UserApp() {
       }
   };
 
-  // --- AUTO-VERIFY (5 Seconds) ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
@@ -145,13 +142,11 @@ export default function UserApp() {
            accessGranted: 'allowed',
            status: 'in_queue'
         });
-        setCurrentPage('queue'); // Force move
       }, 5000);
       return () => clearTimeout(timer);
     }
   }, [currentPage, currentSessionId]);
 
-  // --- DATA SYNC ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
@@ -266,6 +261,7 @@ export default function UserApp() {
       <main className={`min-h-screen ${
           currentPage === 'auth' ? 'bg-[#0a0e14]' : 
           currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
+          currentPage === 'queue' ? 'bg-[#0a0e14]' : 
           'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
       }`}>
         
@@ -301,26 +297,28 @@ export default function UserApp() {
           </div>
         )}
 
-        {/* WAITING ROOM - FIXED */}
+        {/* WAITING ROOM (HIGH VISIBILITY BACKGROUND) */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
+               {/* Background Image: INCREASED OPACITY (80%) */}
                <div className="absolute inset-0 z-0">
                   <img 
-                    src={activeBackground} // USES STABLE SOURCE
-                    className="w-full h-full object-cover opacity-50 blur-sm scale-110" 
+                    src={activeBackground} 
+                    className="w-full h-full object-cover opacity-80 blur-[2px] scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-[#0a0e14]/80 to-black/60" />
+                  {/* Reduced overlay opacity (40%) so image pops */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/40 to-black/40" />
                </div>
                
                <div className="relative z-10 flex flex-col items-center space-y-8">
                    <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
                    <div className="space-y-2">
-                       <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
-                       <p className="text-sm font-bold text-gray-400 uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
+                       <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow-lg">{txt?.holdTitle}</h2>
+                       <p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
                    </div>
-                   <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 max-w-sm shadow-2xl">
-                       <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
-                       <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
+                   <div className="bg-[#1f262d]/90 backdrop-blur-xl p-6 rounded-2xl border border-white/20 max-w-sm shadow-2xl">
+                       <p className="text-xs font-bold text-gray-300">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                       <p className="text-xs font-bold text-gray-400 mt-2">Do not refresh.</p>
                    </div>
                </div>
            </div>
@@ -334,18 +332,19 @@ export default function UserApp() {
            </div>
         )}
 
+        {/* QUEUE - NOW HAS THE SAME BACKGROUND */}
         {currentPage === 'queue' && (
            <div className="fixed inset-0 z-40 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
                <div className="absolute inset-0 z-0">
                   <img 
-                    src={activeBackground} // USES STABLE SOURCE
-                    className="w-full h-full object-cover opacity-30 blur-md scale-110" 
+                    src={activeBackground} 
+                    className="w-full h-full object-cover opacity-80 blur-md scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/40 to-black/40" />
                </div>
 
                <div className="relative z-10 w-full flex flex-col items-center gap-8">
-                   <div className="bg-[#1f262d]/80 backdrop-blur-md p-6 rounded-3xl border border-white/10 w-full max-w-lg mb-4 shadow-2xl">
+                   <div className="bg-[#1f262d]/90 backdrop-blur-md p-6 rounded-3xl border border-white/20 w-full max-w-lg mb-4 shadow-2xl">
                        <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist}</h3>
                        <p className="text-xs font-bold text-[#026cdf] uppercase tracking-widest">{selectedEvent?.venue}</p>
                    </div>
@@ -353,12 +352,12 @@ export default function UserApp() {
                    <div className="flex gap-4 lg:gap-8 items-center justify-center w-full max-w-2xl px-4">
                        {['Lobby', 'Waiting Room', 'Queue', 'Pick Seat'].map((step, i) => {
                            const isActive = (queueProgress < 33 && i === 0) || (queueProgress >= 33 && queueProgress < 66 && i === 1) || (queueProgress >= 66 && queueProgress < 100 && i === 2) || (queueProgress >= 100 && i === 3);
-                           return (<div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}><div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#22c55e] animate-pulse' : 'bg-gray-600'}`} /><span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#22c55e]' : 'text-gray-500'}`}>{step}</span></div>)
+                           return (<div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}><div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#22c55e] animate-pulse' : 'bg-white'}`} /><span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#22c55e]' : 'text-white'}`}>{step}</span></div>)
                        })}
                    </div>
                    
-                   <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.queueTitle}</p></div>
-                   <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
+                   <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none drop-shadow-xl">{queuePosition}</h2><p className="text-sm font-bold text-white uppercase tracking-widest drop-shadow-md">{txt?.queueTitle}</p></div>
+                   <div className="w-full max-w-md bg-white/20 h-4 rounded-full overflow-hidden relative border border-white/20"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
                </div>
            </div>
         )}
@@ -417,5 +416,3 @@ export default function UserApp() {
     </div>
   );
 }
-
-
