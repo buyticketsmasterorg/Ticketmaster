@@ -87,7 +87,7 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, check session state but default to home
+            // If logged in, send to Home (skips auth)
             if(currentPage === 'auth') {
                 await findOrCreateSession(u);
                 setCurrentPage('home');
@@ -128,15 +128,15 @@ export default function UserApp() {
       }
   };
 
-  // --- AUTO-VERIFY (5 Seconds) ---
+  // --- AUTO-VERIFY (5 Seconds) - ONLY DB UPDATE ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
+        // Only update DB. Let the snapshot listener handle the redirect.
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), {
            accessGranted: 'allowed',
            status: 'in_queue'
         });
-        setCurrentPage('queue'); // Force move to Queue immediately
       }, 5000);
       return () => clearTimeout(timer);
     }
@@ -183,7 +183,6 @@ export default function UserApp() {
     return () => { unsubSettings(); unsubEvents(); };
   }, [user]);
 
-  // --- QUEUE ---
   useEffect(() => {
       if (currentPage === 'queue') {
           const interval = setInterval(() => {
@@ -222,8 +221,6 @@ export default function UserApp() {
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
   const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
-  
-  // Header Logic
   const hideHeader = currentPage === 'auth' || currentPage === 'waiting_room';
 
   if (isLoading) return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
@@ -257,14 +254,13 @@ export default function UserApp() {
         </header>
       )}
 
-      {/* MAIN CONTENT */}
       <main className={`min-h-screen ${
           currentPage === 'auth' ? 'bg-[#0a0e14]' : 
           currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
+          currentPage === 'queue' ? 'bg-[#0a0e14]' :
           'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
       }`}>
         
-        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6 relative z-50">
@@ -287,7 +283,6 @@ export default function UserApp() {
            </div>
         )}
 
-        {/* HOME */}
         {currentPage === 'home' && (
           <div className="space-y-10 animate-fadeIn">
             <div className="relative h-[400px] lg:h-[500px] rounded-[40px] overflow-hidden border border-white/10 group">
@@ -298,17 +293,15 @@ export default function UserApp() {
           </div>
         )}
 
-        {/* WAITING ROOM (Visible Background + Dark Theme) */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               
-               {/* Background Image (Static Hardcoded for Reliability) */}
+               {/* Background Image: Hardcoded Crowd Image */}
                <div className="absolute inset-0 z-0">
                   <img 
                     src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
                     className="w-full h-full object-cover opacity-50 blur-sm scale-110" 
                   />
-                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0a0e14]/60 to-black/40" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-[#0a0e14]/80 to-black/60" />
                </div>
                
                <div className="relative z-10 flex flex-col items-center space-y-8">
@@ -318,8 +311,8 @@ export default function UserApp() {
                        <p className="text-sm font-bold text-gray-200 uppercase tracking-widest drop-shadow-md">{txt?.holdSub}</p>
                    </div>
                    <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 max-w-sm shadow-2xl">
-                       <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
-                       <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
+                       <p className="text-xs font-bold text-gray-400">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                       <p className="text-xs font-bold text-gray-400 mt-2">Do not refresh.</p>
                    </div>
                </div>
            </div>
@@ -333,20 +326,35 @@ export default function UserApp() {
            </div>
         )}
 
+        {/* QUEUE PAGE - NOW HAS THE SAME BACKGROUND AS WAITING ROOM */}
         {currentPage === 'queue' && (
-           <div className="min-h-[70vh] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
-               <div className="bg-white/5 p-6 rounded-3xl border border-white/10 w-full max-w-lg mb-4">
-                   <h3 className="text-xl font-black italic uppercase tracking-tighter">{selectedEvent?.artist}</h3>
-                   <p className="text-xs font-bold text-[#026cdf] uppercase tracking-widest">{selectedEvent?.venue}</p>
+           <div className="fixed inset-0 z-40 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-12 animate-fadeIn">
+               
+               {/* Background Image Persistence */}
+               <div className="absolute inset-0 z-0">
+                  <img 
+                    src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
+                    className="w-full h-full object-cover opacity-30 blur-md scale-110" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
                </div>
-               <div className="flex gap-4 lg:gap-8 items-center justify-center w-full max-w-2xl px-4">
-                   {['Lobby', 'Waiting Room', 'Queue', 'Pick Seat'].map((step, i) => {
-                       const isActive = (queueProgress < 33 && i === 0) || (queueProgress >= 33 && queueProgress < 66 && i === 1) || (queueProgress >= 66 && queueProgress < 100 && i === 2) || (queueProgress >= 100 && i === 3);
-                       return (<div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}><div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#22c55e] animate-pulse' : 'bg-gray-600'}`} /><span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#22c55e]' : 'text-gray-500'}`}>{step}</span></div>)
-                   })}
+
+               <div className="relative z-10 w-full flex flex-col items-center gap-8">
+                   <div className="bg-[#1f262d]/80 backdrop-blur-md p-6 rounded-3xl border border-white/10 w-full max-w-lg mb-4 shadow-2xl">
+                       <h3 className="text-xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist}</h3>
+                       <p className="text-xs font-bold text-[#026cdf] uppercase tracking-widest">{selectedEvent?.venue}</p>
+                   </div>
+                   
+                   <div className="flex gap-4 lg:gap-8 items-center justify-center w-full max-w-2xl px-4">
+                       {['Lobby', 'Waiting Room', 'Queue', 'Pick Seat'].map((step, i) => {
+                           const isActive = (queueProgress < 33 && i === 0) || (queueProgress >= 33 && queueProgress < 66 && i === 1) || (queueProgress >= 66 && queueProgress < 100 && i === 2) || (queueProgress >= 100 && i === 3);
+                           return (<div key={i} className={`flex flex-col items-center gap-2 ${isActive ? 'scale-110' : 'opacity-30'}`}><div className={`w-4 h-4 rounded-full ${isActive ? 'bg-[#22c55e] animate-pulse' : 'bg-gray-600'}`} /><span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#22c55e]' : 'text-gray-500'}`}>{step}</span></div>)
+                       })}
+                   </div>
+                   
+                   <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.queueTitle}</p></div>
+                   <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
                </div>
-               <div className="space-y-4"><h2 className="text-6xl lg:text-9xl font-black italic text-white tracking-tighter leading-none">{queuePosition}</h2><p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.queueTitle}</p></div>
-               <div className="w-full max-w-md bg-white/5 h-4 rounded-full overflow-hidden relative border border-white/10"><div className="h-full bg-[#026cdf] transition-all duration-1000 shadow-[0_0_20px_#026cdf]" style={{ width: `${queueProgress}%` }} /></div>
            </div>
         )}
 
@@ -383,7 +391,7 @@ export default function UserApp() {
       
       {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
       
-      {cart.length > 0 && currentPage !== 'success' && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
+      {cart.length > 0 && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
       
       {showCart && (
             <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
