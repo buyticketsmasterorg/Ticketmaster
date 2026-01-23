@@ -67,7 +67,8 @@ export default function UserApp() {
   const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // Define txt early to prevent crashes
+  // --- FLAGS FIX: Defined here to prevent crash ---
+  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
   const txt = t[lang] || t.EN;
 
   useEffect(() => {
@@ -85,7 +86,8 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            if (currentPage === 'auth') {
+            // If logged in, send to Home (skips auth)
+            if(currentPage === 'auth') {
                 await findOrCreateSession(u);
                 setCurrentPage('home');
             } else {
@@ -125,6 +127,7 @@ export default function UserApp() {
       }
   };
 
+  // --- AUTO-VERIFY (5 Seconds) ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
@@ -215,48 +218,47 @@ export default function UserApp() {
   const updateSession = (updates) => { if(currentSessionId) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), updates); };
   
   const filteredEvents = eventsList.filter(e => e.artist.toLowerCase().includes(searchTerm.toLowerCase()));
-  const hideHeader = currentPage === 'auth' || currentPage === 'waiting_room';
 
   if (isLoading) return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {!hideHeader && (
+      {!user && currentPage === 'auth' ? null : (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
-            <div className="flex items-center gap-3 z-20">
-                {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
-                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
-            </div>
-            <div className="flex items-center gap-4 z-20">
-                <div className="relative">
-                    <button onClick={() => { setShowNotifPanel(!showNotifPanel); setUnreadNotifCount(0); }} className="p-2 hover:bg-white/10 rounded-full relative">
-                        <Bell className={`w-5 h-5 ${unreadNotifCount > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
-                        {unreadNotifCount > 0 && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold text-white border border-[#1f262d]">{unreadNotifCount}</div>}
-                    </button>
-                    {showNotifPanel && (
-                        <div className="absolute top-12 right-4 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto z-50">
-                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
-                            {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : userNotifications.map((n, i) => (<div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>))}
+            {currentPage !== 'waiting_room' && (
+                <>
+                    <div className="flex items-center gap-3 z-20">
+                        {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
+                        <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
+                    </div>
+                    <div className="flex items-center gap-4 z-20">
+                        <div className="relative">
+                            <button onClick={() => { setShowNotifPanel(!showNotifPanel); setUnreadNotifCount(0); }} className="p-2 hover:bg-white/10 rounded-full relative">
+                                <Bell className={`w-5 h-5 ${unreadNotifCount > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
+                                {unreadNotifCount > 0 && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold text-white border border-[#1f262d]">{unreadNotifCount}</div>}
+                            </button>
+                            {showNotifPanel && (
+                                <div className="absolute top-12 right-4 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto z-50">
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
+                                    {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : userNotifications.map((n, i) => (<div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>))}
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
-                {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
-                <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
-            </div>
+                        {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
+                        <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags?.[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
+                    </div>
+                </>
+            )}
             {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
       )}
 
-      {/* MAIN CONTAINER BACKGROUND LOGIC:
-        - AUTH: Always White Box on Dark Background
-        - WAITING ROOM: Transparent container (Handled by component fixed overlay)
-        - HOME/QUEUE/SEATMAP: Standard Dark Theme
-      */}
       <main className={`min-h-screen ${
-            currentPage === 'auth' ? 'bg-[#0a0e14]' : 
-            'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
-        }`}>
+          currentPage === 'auth' ? 'bg-[#0a0e14]' : 
+          currentPage === 'waiting_room' ? 'bg-[#0a0e14]' : 
+          'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#0a0e14] text-gray-100'
+      }`}>
         
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
@@ -391,5 +393,3 @@ export default function UserApp() {
     </div>
   );
 }
-
-
