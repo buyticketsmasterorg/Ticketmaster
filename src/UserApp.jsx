@@ -195,7 +195,8 @@ export default function UserApp() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {!user && currentPage === 'auth' ? null : (
+      {/* HEADER - HIDDEN ON WAITING ROOM AND AUTH */}
+      {(!user || currentPage === 'auth' || currentPage === 'waiting_room') ? null : (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
                 {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
@@ -221,7 +222,12 @@ export default function UserApp() {
         </header>
       )}
 
-      <main className={`min-h-screen ${currentPage === 'auth' ? 'bg-white' : 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#f1f5f9] text-gray-900'}`}>
+      {/* MAIN CONTAINER (Conditionally Remove Background) */}
+      <main className={`min-h-screen ${
+            currentPage === 'auth' ? 'bg-white' : 
+            currentPage === 'waiting_room' ? '' : 
+            'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#f1f5f9] text-gray-900'
+        }`}>
         
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
@@ -255,25 +261,28 @@ export default function UserApp() {
           </div>
         )}
 
-        {/* WAITING ROOM - DARK THEME & BACKGROUND */}
+        {/* WAITING ROOM (Fixed Z-Index & Overlay) */}
         {currentPage === 'waiting_room' && (
-           <div className="fixed inset-0 z-50 bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               {/* Background Image */}
+           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
+               
+               {/* Background Image (Blurred) */}
                {selectedEvent?.image && (
                  <div className="absolute inset-0 z-0">
-                    <img src={selectedEvent.image} className="w-full h-full object-cover opacity-20 blur-xl scale-110" />
-                    <div className="absolute inset-0 bg-black/60" />
+                    <img src={selectedEvent.image} className="w-full h-full object-cover opacity-20 blur-2xl scale-110" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#0a0e14]/90 to-black/70" />
                  </div>
                )}
                
-               <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
-               <div className="space-y-2 z-10">
-                   <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
-                   <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p>
-               </div>
-               <div className="bg-[#1f262d] p-6 rounded-2xl border border-white/10 max-w-sm z-10 shadow-2xl">
-                   <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
-                   <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
+               <div className="relative z-10 flex flex-col items-center space-y-8">
+                   <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
+                   <div className="space-y-2">
+                       <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{txt?.holdTitle}</h2>
+                       <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">{txt?.holdSub}</p>
+                   </div>
+                   <div className="bg-[#1f262d]/80 backdrop-blur-xl p-6 rounded-2xl border border-white/10 max-w-sm shadow-2xl">
+                       <p className="text-xs font-bold text-gray-500">Session ID: <span className="text-white font-mono">{currentSessionId?.slice(0,8)}...</span></p>
+                       <p className="text-xs font-bold text-gray-500 mt-2">Do not refresh.</p>
+                   </div>
                </div>
            </div>
         )}
@@ -317,7 +326,7 @@ export default function UserApp() {
 
       </main>
 
-      {user && currentPage !== 'auth' && (
+      {user && currentPage !== 'auth' && currentPage !== 'waiting_room' && (
         <div className={`fixed right-6 z-[200] transition-all duration-300 ${cart.length > 0 ? 'bottom-28' : 'bottom-6'}`}>
             <button onClick={()=>{setIsChatOpen(!isChatOpen); if(!isChatOpen) setHasUnread(false);}} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button>
         </div>
