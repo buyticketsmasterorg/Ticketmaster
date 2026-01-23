@@ -67,10 +67,11 @@ export default function UserApp() {
   const [userNotifications, setUserNotifications] = useState([]);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
 
-  // --- FLAGS FIX: Defined here to prevent crash ---
-  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
+  // Define txt early to prevent crashes
   const txt = t[lang] || t.EN;
+  const flags = { 'EN': '🇬🇧', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷' };
 
+  // --- RESTORE SELECTED EVENT ON REFRESH ---
   useEffect(() => {
     const savedId = sessionStorage.getItem('selectedEventId');
     if (savedId && eventsList.length > 0 && !selectedEvent) {
@@ -127,10 +128,11 @@ export default function UserApp() {
       }
   };
 
-  // --- AUTO-VERIFY (5 Seconds) ---
+  // --- AUTO-VERIFY (5 Seconds) - ONLY DB UPDATE ---
   useEffect(() => {
     if (currentPage === 'waiting_room' && currentSessionId) {
       const timer = setTimeout(async () => {
+        // Only update DB. Let the snapshot listener handle the redirect.
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), {
            accessGranted: 'allowed',
            status: 'in_queue'
@@ -140,6 +142,7 @@ export default function UserApp() {
     }
   }, [currentPage, currentSessionId]);
 
+  // --- DATA SYNC ---
   useEffect(() => {
     if (!currentSessionId) return;
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
@@ -224,32 +227,28 @@ export default function UserApp() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans overflow-x-hidden selection:bg-[#026cdf] selection:text-white">
       
-      {!user && currentPage === 'auth' ? null : (
+      {!user && currentPage === 'auth' ? null : currentPage === 'waiting_room' ? null : (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/90 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-4 lg:px-8 shadow-2xl">
-            {currentPage !== 'waiting_room' && (
-                <>
-                    <div className="flex items-center gap-3 z-20">
-                        {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
-                        <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
-                    </div>
-                    <div className="flex items-center gap-4 z-20">
-                        <div className="relative">
-                            <button onClick={() => { setShowNotifPanel(!showNotifPanel); setUnreadNotifCount(0); }} className="p-2 hover:bg-white/10 rounded-full relative">
-                                <Bell className={`w-5 h-5 ${unreadNotifCount > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
-                                {unreadNotifCount > 0 && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold text-white border border-[#1f262d]">{unreadNotifCount}</div>}
-                            </button>
-                            {showNotifPanel && (
-                                <div className="absolute top-12 right-4 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto z-50">
-                                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
-                                    {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : userNotifications.map((n, i) => (<div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>))}
-                                </div>
-                            )}
+            <div className="flex items-center gap-3 z-20">
+                {currentPage !== 'home' && <button onClick={() => setCurrentPage('home')} className="p-2 rounded-full hover:bg-white/10 active:scale-95 transition-all"><ChevronLeft className="w-5 h-5" /></button>}
+                <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}><span className="font-extrabold text-xl tracking-tighter italic">ticketmaster</span><CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" /></div>
+            </div>
+            <div className="flex items-center gap-4 z-20">
+                <div className="relative">
+                    <button onClick={() => { setShowNotifPanel(!showNotifPanel); setUnreadNotifCount(0); }} className="p-2 hover:bg-white/10 rounded-full relative">
+                        <Bell className={`w-5 h-5 ${unreadNotifCount > 0 ? 'text-red-500 animate-pulse' : 'text-gray-400'}`} />
+                        {unreadNotifCount > 0 && <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold text-white border border-[#1f262d]">{unreadNotifCount}</div>}
+                    </button>
+                    {showNotifPanel && (
+                        <div className="absolute top-12 right-4 w-72 bg-[#1f262d] border border-white/10 rounded-2xl shadow-2xl p-4 animate-slideDown max-h-60 overflow-y-auto z-50">
+                            <h4 className="text-xs font-black uppercase tracking-widest text-gray-500 mb-4">Priority Alerts</h4>
+                            {userNotifications.length === 0 ? <p className="text-xs text-gray-500 text-center">No alerts yet</p> : userNotifications.map((n, i) => (<div key={i} className="mb-3 pb-3 border-b border-white/5 last:border-0"><p className="text-xs font-bold text-white">{n.text}</p><p className="text-[10px] text-gray-500 mt-1">{new Date(n.timestamp).toLocaleTimeString()}</p></div>))}
                         </div>
-                        {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
-                        <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags?.[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
-                    </div>
-                </>
-            )}
+                    )}
+                </div>
+                {currentPage === 'home' && (<><button onClick={() => setShowMobileSearch(!showMobileSearch)} className="lg:hidden p-2 text-gray-400 hover:text-white"><Search className="w-5 h-5" /></button><div className="hidden lg:flex relative group"><input className="bg-white/10 border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm w-48 focus:w-64 transition-all outline-none focus:bg-white focus:text-black" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /><Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400 group-focus-within:text-[#026cdf]" /></div></>)}
+                <div className="relative"><button onClick={() => setShowLangMenu(!showLangMenu)} className="flex items-center gap-1 text-sm font-bold bg-white/10 px-3 py-1.5 rounded-full hover:bg-white/20 transition-all"><span>{flags?.[lang]}</span><span>{lang}</span></button>{showLangMenu && <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 rounded-xl p-2 shadow-xl flex flex-col gap-1 w-24 animate-slideDown">{Object.keys(flags).map(l => (<button key={l} onClick={() => {setLang(l); setShowLangMenu(false);}} className="text-left px-3 py-2 hover:bg-white/10 rounded-lg text-xs font-bold">{flags[l]} {l}</button>))}</div>}</div>
+            </div>
             {showMobileSearch && currentPage === 'home' && <div className="absolute top-16 left-0 w-full bg-[#1f262d] p-4 border-b border-white/10 animate-slideDown lg:hidden z-10"><input autoFocus className="w-full bg-black/20 border border-white/10 rounded-xl py-3 px-4 text-sm text-white outline-none" placeholder="Search events..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} /></div>}
         </header>
       )}
@@ -294,12 +293,15 @@ export default function UserApp() {
 
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center space-y-8 animate-fadeIn">
-               {(selectedEvent || INITIAL_EVENTS[0]).image && (
-                 <div className="absolute inset-0 z-0">
-                    <img src={(selectedEvent || INITIAL_EVENTS[0]).image} className="w-full h-full object-cover opacity-30 blur-2xl scale-110" />
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
-                 </div>
-               )}
+               {/* Fixed Background Image using Static URL to ensure background image always shows */}
+               <div className="absolute inset-0 z-0">
+                  <img 
+                    src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" 
+                    className="w-full h-full object-cover opacity-30 blur-2xl scale-110" 
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#0a0e14]/90 to-black/80" />
+               </div>
+               
                <div className="relative z-10 flex flex-col items-center space-y-8">
                    <div className="w-20 h-20 border-4 border-[#22c55e] border-t-transparent rounded-full animate-spin z-10" />
                    <div className="space-y-2">
@@ -340,7 +342,7 @@ export default function UserApp() {
         )}
 
         {currentPage === 'seatmap' && <SeatMap event={selectedEvent} regularPrice={globalSettings.regularPrice} vipPrice={globalSettings.vipPrice} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />}
-        {currentPage === 'checkout' && <Checkout cart={cart} onBack={() => setCurrentPage('seatmap')} onSuccess={() => setCurrentPage('success')} />}
+        {currentPage === 'checkout' && <Checkout cart={cart} onBack={() => setCurrentPage('seatmap')} onSuccess={() => { setCart([]); setCurrentPage('success'); }} />}
 
         {currentPage === 'success' && (
           <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-fadeIn">
@@ -372,7 +374,7 @@ export default function UserApp() {
       
       {isChatOpen && <div className="fixed bottom-24 right-6 w-[90vw] max-w-sm h-[450px] bg-white rounded-[30px] shadow-2xl overflow-hidden flex flex-col z-[200] animate-slideUp"><div className="bg-[#1f262d] p-4 flex items-center gap-3 border-b border-white/10"><div className="w-10 h-10 bg-[#026cdf] rounded-full flex items-center justify-center font-black text-white text-xs">TM</div><div><p className="font-bold text-white text-sm">Support Agent</p><p className="text-[10px] text-green-400 font-bold uppercase tracking-widest">Online</p></div></div><div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">{chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`max-w-[80%] p-3 rounded-2xl text-xs font-bold ${m.sender==='user'?'bg-[#026cdf] text-white rounded-br-none':'bg-white text-black border border-gray-100 rounded-bl-none'}`}>{m.text}</div></div>))}</div><div className="p-3 bg-white border-t flex gap-2"><input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 text-sm text-black font-bold outline-none" placeholder="Message..." /><button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()) { const newHistory = [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}]; setChatMessages(newHistory); updateSession({ chatHistory: newHistory }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button></div></div>}
       
-      {cart.length > 0 && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
+      {cart.length > 0 && currentPage !== 'success' && <div onClick={() => setShowCart(true)} className="fixed bottom-0 left-0 w-full bg-white border-t border-gray-100 p-6 z-50 animate-slideUp shadow-[0_-10px_40px_rgba(0,0,0,0.1)] cursor-pointer hover:bg-gray-50 transition-colors"><div className="max-w-7xl mx-auto flex items-center justify-between"><div><p className="text-xs font-black text-gray-400 uppercase tracking-widest">Total (Tap to view)</p><p className="text-3xl font-black text-gray-900">${cart.reduce((a,b) => a + b.price, 0)}</p></div><button onClick={(e) => { e.stopPropagation(); setCurrentPage('checkout'); }} className="bg-[#026cdf] text-white px-8 lg:px-12 py-4 rounded-full font-black uppercase italic tracking-widest shadow-[0_10px_30px_rgba(2,108,223,0.4)] hover:scale-105 active:scale-95 transition-all">Proceed to Pay</button></div></div>}
       
       {showCart && (
             <div className="fixed inset-0 z-[300] bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
@@ -393,3 +395,5 @@ export default function UserApp() {
     </div>
   );
 }
+
+
