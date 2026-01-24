@@ -17,7 +17,7 @@ const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 export default function AdminApp() {
-  const [view, setView] = useState('dashboard'); 
+  const [view, setView] = useState('dashboard'); // dashboard, chats, chat_detail, events, prices
   const [allSessions, setAllSessions] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null); 
   const [adminMsg, setAdminMsg] = useState('');
@@ -26,26 +26,13 @@ export default function AdminApp() {
   const [newEvent, setNewEvent] = useState({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
   const [eventsList, setEventsList] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
-  const [showMenu, setShowMenu] = useState(false);
 
-  // --- SYNC DATA (FIXED DATE CRASH) ---
+  // --- SYNC ---
   useEffect(() => {
-    // Sessions
+    // 1. Sessions (Simple Query)
     const unsubSessions = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), (snap) => {
-        const users = snap.docs.map(d => {
-            const data = d.data();
-            // NORMALIZE DATE: Handle Firestore Timestamp OR String
-            let validDate = new Date();
-            if (data.createdAt?.toDate) {
-                validDate = data.createdAt.toDate();
-            } else if (data.createdAt) {
-                validDate = new Date(data.createdAt);
-            }
-            return { id: d.id, ...data, createdAt: validDate };
-        });
-        
-        // Sort manually to avoid index errors
-        users.sort((a, b) => b.createdAt - a.createdAt);
+        const users = snap.docs.map(d => ({id: d.id, ...d.data()}));
+        users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setAllSessions(users);
     });
 
@@ -60,6 +47,10 @@ export default function AdminApp() {
     return () => { unsubSessions(); unsubSettings(); unsubEvents(); };
   }, []);
 
+  // --- ACTIONS ---
+  const updateSessionStatus = async (sid, status) => {
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'in_queue' : 'blocked' });
+  };
   const updateGlobalPrice = async (type, val) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), { [type]: Number(val) });
   };
@@ -87,34 +78,20 @@ export default function AdminApp() {
       if(confirm('Delete user session permanently?')) {
           setSelectedUser(null); setView('chats');
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
-          setShowMenu(false);
       }
   };
 
-  // Safe filters
   const waitingUsers = allSessions.filter(s => s.status === 'waiting_approval');
-  // We filter out waiting users from the main list, but since auto-verify moves them fast, 
-  // we might want to see EVERYONE in the main list. 
-  // Let's show everyone who ISN'T waiting in the main list.
   const activeUsers = allSessions.filter(s => s.status !== 'waiting_approval');
+  const getAvatar = (name) => name ? name.charAt(0).toUpperCase() : '?';
 
-  const getAvatar = (name) => {
-      if (!name) return '?';
-      return name.charAt(0).toUpperCase();
-  };
-  
-  // Safe Date Formatter
-  const formatTime = (dateObj) => {
-      if (!dateObj || isNaN(dateObj.getTime())) return '';
-      return dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  };
-
+  // --- RENDER ---
   return (
-    <div className={`fixed inset-0 font-sans flex overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
         
         {/* --- VIEW: DASHBOARD (MENU) --- */}
         {view === 'dashboard' && (
-            <div className="p-6 max-w-lg mx-auto h-full overflow-y-auto w-full">
+            <div className="p-6 max-w-lg mx-auto">
                 <div className="flex justify-between items-center mb-10">
                     <h1 className="text-3xl font-black uppercase italic tracking-tighter">War Room</h1>
                     <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-full bg-white/10">{darkMode ? <Sun /> : <Moon />}</button>
@@ -143,7 +120,7 @@ export default function AdminApp() {
                         <span className="font-black uppercase tracking-widest text-sm">Pricing</span>
                     </button>
                     
-                    {/* SETTINGS */}
+                    {/* SETTINGS (Placeholder) */}
                     <button className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl opacity-50 cursor-not-allowed ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
                         <Settings className="w-12 h-12" />
                         <span className="font-black uppercase tracking-widest text-sm">Settings</span>
@@ -152,105 +129,111 @@ export default function AdminApp() {
             </div>
         )}
 
-        {/* --- VIEW: CHAT LIST (FIXED FOR MOBILE) --- */}
+        {/* --- VIEW: CHAT LIST --- */}
         {view === 'chats' && (
-            <div className="flex flex-col h-full w-full max-h-full overflow-hidden">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
-                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
-                    <h2 className="font-bold text-xl">Inbox ({allSessions.length})</h2>
+            <div className="p-4 max-w-lg mx-auto">
+                <div className="flex items-center gap-4 mb-6">
+                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-8 h-8" /></button>
+                    <h2 className="font-bold text-2xl">Inbox ({allSessions.length})</h2>
                 </div>
                 
-                {/* STORIES (Waiting) */}
+                {/* WAITING USERS */}
                 {waitingUsers.length > 0 && (
-                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10 flex-shrink-0">
-                        <div className="flex gap-4">
+                    <div className="mb-6">
+                        <h3 className="text-xs font-black uppercase tracking-widest opacity-50 mb-3">Gate Requests</h3>
+                        <div className="space-y-2">
                             {waitingUsers.map(s => (
-                                <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex flex-col items-center gap-2 cursor-pointer w-20 flex-shrink-0">
-                                    <div className="w-16 h-16 rounded-full border-4 border-red-500 p-1"><div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center font-bold text-xl">{getAvatar(s.name)}</div></div>
-                                    <span className="text-xs font-bold truncate w-full text-center">{s.name ? s.name.split(' ')[0] : 'Visitor'}</span>
+                                <div key={s.id} onClick={() => { setSelectedUser(s); setView('chat_detail'); }} className="flex items-center justify-between p-4 rounded-2xl bg-orange-500/10 border border-orange-500/30 cursor-pointer">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center font-bold text-white">{getAvatar(s.name)}</div>
+                                        <div><h4 className="font-bold text-sm">{s.name}</h4><p className="text-xs opacity-70">Waiting for approval...</p></div>
+                                    </div>
+                                    <ChevronLeft className="w-5 h-5 rotate-180 opacity-50" />
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* LIST (Active) - FIXED FOR MOBILE */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
-                    {allSessions.length === 0 ? (
-                        <div className="p-10 text-center opacity-50">No users found...</div>
-                    ) : (
-                        activeUsers.map(s => (
-                            <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 active:bg-white/20">
-                                <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold flex-shrink-0">{getAvatar(s.name)}</div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between"><h4 className="font-bold truncate">{s.name || 'Visitor'}</h4><span className="text-xs text-gray-500 flex-shrink-0 ml-2">{formatTime(s.createdAt)}</span></div>
-                                    <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                {/* ACTIVE USERS */}
+                <div>
+                    <h3 className="text-xs font-black uppercase tracking-widest opacity-50 mb-3">Active Users</h3>
+                    <div className="space-y-2">
+                        {activeUsers.length === 0 ? <p className="opacity-30 text-center py-10">No active users</p> : activeUsers.map(s => (
+                            <div key={s.id} onClick={() => { setSelectedUser(s); setView('chat_detail'); }} className={`flex items-center justify-between p-4 rounded-2xl border cursor-pointer ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100 shadow-sm'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold text-white">{getAvatar(s.name)}</div>
+                                    <div><h4 className="font-bold text-sm">{s.name || 'Visitor'}</h4><p className="text-xs opacity-50">{s.email}</p></div>
                                 </div>
+                                <ChevronLeft className="w-5 h-5 rotate-180 opacity-50" />
                             </div>
-                        ))
-                    )}
+                        ))}
+                    </div>
                 </div>
             </div>
         )}
 
-        {/* --- VIEW: SPECIFIC CHAT --- */}
-        {view === 'specific_chat' && selectedUser && (
-            <div className="flex flex-col h-full w-full fixed inset-0 z-50 bg-[#0a0e14]">
+        {/* --- VIEW: CHAT DETAIL --- */}
+        {view === 'chat_detail' && selectedUser && (
+            <div className="flex flex-col h-screen max-w-lg mx-auto bg-black">
                 {/* Header */}
-                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d] flex-shrink-0">
+                <div className={`p-4 border-b flex justify-between items-center ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
                     <div className="flex items-center gap-3">
                         <button onClick={() => setView('chats')}><ChevronLeft className="w-6 h-6" /></button>
-                        <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">{getAvatar(selectedUser.name)}</div>
-                        <div><h3 className="font-bold">{selectedUser.name || 'Visitor'}</h3><p className="text-xs text-gray-400">{selectedUser.email}</p></div>
+                        <div><h3 className="font-bold">{selectedUser.name}</h3><p className="text-xs opacity-50">{selectedUser.status}</p></div>
                     </div>
-                    <div className="relative">
-                        <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-white/10"><MoreVertical className="w-5 h-5" /></button>
-                        {showMenu && (
-                            <div className="absolute top-10 right-0 bg-[#1f262d] border border-white/10 shadow-xl rounded-xl overflow-hidden z-50 w-48">
-                                <button onClick={() => deleteSession(selectedUser.id)} className="w-full text-left px-4 py-3 text-red-500 hover:bg-red-500/10 text-sm font-bold flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete Session</button>
-                            </div>
-                        )}
-                    </div>
+                    <button onClick={() => deleteSession(selectedUser.id)} className="text-red-500"><Trash2 className="w-5 h-5" /></button>
                 </div>
 
-                {/* Messages (No Approve Buttons) */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0" onClick={() => setShowMenu(false)}>
+                {/* Messages */}
+                <div className={`flex-1 overflow-y-auto p-4 space-y-3 ${darkMode ? 'bg-black' : 'bg-gray-50'}`}>
+                     {selectedUser.status === 'waiting_approval' && (
+                         <div className="bg-orange-900/30 p-4 rounded-xl text-center border border-orange-500/30 mb-6">
+                             <p className="text-orange-400 font-bold text-xs mb-3">User is at the Gate</p>
+                             <div className="flex justify-center gap-3">
+                                 <button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-600 px-6 py-2 rounded-full font-bold text-xs uppercase">Approve</button>
+                                 <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-600 px-6 py-2 rounded-full font-bold text-xs uppercase">Deny</button>
+                             </div>
+                         </div>
+                     )}
                     {(selectedUser.chatHistory || []).map((m, i) => (
                         <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
-                            <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white':'bg-gray-700 text-white'}`}>{m.text}</div>
+                            <div className={`max-w-[80%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white': 'bg-gray-700 text-gray-200'}`}>{m.text}</div>
                         </div>
                     ))}
                 </div>
 
                 {/* Input */}
-                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3 flex-shrink-0">
-                    <div className="flex gap-2">
-                        <input className="flex-1 bg-black/20 rounded-full px-4 py-3 text-sm outline-none text-white border border-white/10" placeholder="Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
-                        <button onClick={sendAdminMessage} className="p-3 bg-blue-600 rounded-full text-white"><Send className="w-5 h-5" /></button>
+                <div className={`p-3 border-t ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+                    <div className="flex gap-2 mb-3">
+                        <input className="flex-1 bg-white/10 rounded-full px-4 py-3 text-sm outline-none" placeholder="Reply..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
+                        <button onClick={sendAdminMessage} className="bg-blue-600 p-3 rounded-full"><Send className="w-4 h-4" /></button>
                     </div>
                     <div className="flex gap-2">
-                        <input className="flex-1 bg-red-900/20 rounded-full px-4 py-2 text-xs outline-none text-red-400 border border-red-900/50" placeholder="Priority Alert..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} />
-                        <button onClick={sendAdminPing} className="p-2 bg-red-600 rounded-full text-white"><Bell className="w-4 h-4" /></button>
+                        <input className="flex-1 bg-red-900/20 rounded-full px-4 py-2 text-xs outline-none text-red-400 border border-red-900/50" placeholder="Send Alert..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} />
+                        <button onClick={sendAdminPing} className="p-2 bg-red-600 rounded-full"><Bell className="w-4 h-4" /></button>
                     </div>
                 </div>
             </div>
         )}
 
-        {/* --- VIEW: EVENTS MANAGER --- */}
+        {/* --- VIEW: EVENTS --- */}
         {view === 'events' && (
-            <div className="flex flex-col h-full w-full">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
+            <div className="p-4 max-w-lg mx-auto">
+                <div className="flex items-center gap-4 mb-6">
                     <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
-                    <h2 className="font-bold text-xl">Manage Events</h2>
+                    <h2 className="font-bold text-xl">Events Manager</h2>
                 </div>
-                <div className="p-6 space-y-4 overflow-y-auto flex-1 min-h-0">
-                    <input placeholder="Artist Name" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
-                    <input placeholder="Venue" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
-                    <input placeholder="Date (e.g. Sat • Aug 17)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
-                    <input placeholder="Image URL (Right click image -> Copy Link)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                <div className="space-y-4">
+                    <input placeholder="Artist" className="w-full bg-white/10 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
                     <div className="flex gap-2">
-                        <input placeholder="Badge (High Demand)" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
-                        <input placeholder="Timer (02:45:00)" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
+                         <input placeholder="Venue" className="flex-1 bg-white/10 p-4 rounded-xl outline-none" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
+                         <input placeholder="Date" className="flex-1 bg-white/10 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
+                    </div>
+                    <input placeholder="Image URL" className="w-full bg-white/10 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                    <div className="flex gap-2">
+                        <input placeholder="Badge" className="flex-1 bg-white/10 p-4 rounded-xl outline-none" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
+                        <input placeholder="Timer" className="flex-1 bg-white/10 p-4 rounded-xl outline-none" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
                     </div>
                     <button onClick={createEvent} className="w-full bg-purple-600 text-white py-4 rounded-xl font-bold uppercase">Publish</button>
                     
@@ -266,28 +249,27 @@ export default function AdminApp() {
             </div>
         )}
 
-        {/* --- VIEW: PRICING --- */}
+        {/* --- VIEW: PRICES --- */}
         {view === 'prices' && (
-            <div className="flex flex-col h-full w-full">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
+            <div className="p-4 max-w-lg mx-auto">
+                <div className="flex items-center gap-4 mb-6">
                     <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Pricing Control</h2>
                 </div>
-                <div className="p-6 space-y-8 flex-1 overflow-y-auto min-h-0">
+                <div className="space-y-6">
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-blue-400">Regular Seat Price</label>
-                        <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
+                        <input type="number" className="w-full bg-white/10 p-4 rounded-xl text-2xl font-mono" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
                         <button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-blue-600 py-3 rounded-xl font-bold uppercase">Update Regular</button>
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-pink-500">VIP Seat Price</label>
-                        <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} />
+                        <input type="number" className="w-full bg-white/10 p-4 rounded-xl text-2xl font-mono" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} />
                         <button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-600 py-3 rounded-xl font-bold uppercase">Update VIP</button>
                     </div>
                 </div>
             </div>
         )}
-
     </div>
   );
 }
