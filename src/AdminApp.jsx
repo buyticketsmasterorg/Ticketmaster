@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, CheckCircle, MessageSquare, Send, Bell, UserPlus, Settings, Calendar, ChevronLeft, Check, Ban, Trash2, Moon, Sun, MoreVertical, X } from 'lucide-react';
+import { Search, CheckCircle, MessageSquare, Send, Bell, UserPlus, Settings, Calendar, ChevronLeft, Check, Ban, Trash2, Moon, Sun, MoreVertical, X, DollarSign, Users } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, updateDoc, doc, onSnapshot, query, orderBy, addDoc, deleteDoc } from 'firebase/firestore';
 
@@ -17,7 +17,7 @@ const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 export default function AdminApp() {
-  const [adminTab, setAdminTab] = useState('chats'); 
+  const [view, setView] = useState('dashboard'); // dashboard, chats, events, prices, specific_chat
   const [allSessions, setAllSessions] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null); 
   const [adminMsg, setAdminMsg] = useState('');
@@ -25,9 +25,9 @@ export default function AdminApp() {
   const [globalSettings, setGlobalSettings] = useState({ regularPrice: 150, vipPrice: 450 });
   const [newEvent, setNewEvent] = useState({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
   const [eventsList, setEventsList] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [darkMode, setDarkMode] = useState(true); // Default Dark for "War Room" feel
 
+  // --- SYNC ---
   useEffect(() => {
     const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), orderBy('createdAt', 'desc'));
     const unsubSessions = onSnapshot(q, (snap) => setAllSessions(snap.docs.map(d => ({id: d.id, ...d.data()}))));
@@ -43,27 +43,19 @@ export default function AdminApp() {
     return () => { unsubSessions(); unsubSettings(); unsubEvents(); };
   }, []);
 
-  useEffect(() => {
-      if (selectedUser && !allSessions.find(s => s.id === selectedUser.id)) {
-          setSelectedUser(null);
-      }
-  }, [allSessions, selectedUser]);
-
+  // --- ACTIONS ---
   const updateSessionStatus = async (sid, status) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid), { accessGranted: status, status: status === 'allowed' ? 'in_queue' : 'blocked' });
   };
-
   const updateGlobalPrice = async (type, val) => {
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), { [type]: Number(val) });
   };
-
   const sendAdminMessage = async () => {
       if(!selectedUser || !adminMsg.trim()) return;
       const newHistory = [...(selectedUser.chatHistory || []), { sender: 'system', text: adminMsg, timestamp: new Date().toISOString() }];
       await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', selectedUser.id), { chatHistory: newHistory });
       setAdminMsg('');
   };
-
   const sendAdminPing = async () => {
       if(!selectedUser || !adminAlert.trim()) return;
       const newNotifs = [...(selectedUser.notifications || []), { text: adminAlert, timestamp: new Date().toISOString() }];
@@ -71,183 +63,207 @@ export default function AdminApp() {
       setAdminAlert('');
       alert("Alert Sent!");
   };
-
   const createEvent = async () => {
       if(!newEvent.artist) return;
       await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), newEvent);
       setNewEvent({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
       alert("Event Published!");
   };
-
-  const deleteEvent = async (eid) => {
-      if(confirm("Delete this event?")) {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eid));
-      }
-  };
-  
+  const deleteEvent = async (eid) => { if(confirm("Delete this event?")) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', eid)); };
   const deleteSession = async (sid) => {
       if(confirm('Delete user session permanently?')) {
-          setSelectedUser(null);
+          setSelectedUser(null); setView('chats');
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', sid));
-          setShowMenu(false);
       }
   };
 
   const waitingUsers = allSessions.filter(s => s.status === 'waiting_approval');
   const activeUsers = allSessions.filter(s => s.status !== 'waiting_approval');
+  const getAvatar = (name) => name ? name.charAt(0).toUpperCase() : '?';
 
-  const getAvatar = (name) => {
-      if (!name) return '?';
-      return name.charAt(0).toUpperCase();
-  };
-
+  // --- RENDER ---
   return (
-    <div className={`fixed inset-0 font-sans flex overflow-hidden ${darkMode ? 'bg-gray-900 text-white' : 'bg-white text-gray-900'}`}>
+    <div className={`min-h-screen font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
         
-        {/* SIDEBAR - HIDDEN ON MOBILE IF USER SELECTED */}
-        <div className={`w-full md:w-1/3 flex flex-col h-full border-r ${darkMode ? 'border-gray-800' : 'border-gray-200'} ${selectedUser ? 'hidden md:flex' : 'flex'}`}>
-            <div className={`p-4 border-b flex justify-between items-center ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'}`}>
-                <div className="flex items-center gap-3">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/6/6c/Facebook_Messenger_logo_2018.svg" className="w-8 h-8" />
-                    <h1 className="font-bold text-2xl tracking-tight">Chats</h1>
+        {/* --- VIEW: DASHBOARD (MENU) --- */}
+        {view === 'dashboard' && (
+            <div className="p-6 max-w-lg mx-auto">
+                <div className="flex justify-between items-center mb-10">
+                    <h1 className="text-3xl font-black uppercase italic tracking-tighter">War Room</h1>
+                    <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-full bg-white/10">{darkMode ? <Sun /> : <Moon />}</button>
                 </div>
-                <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-full ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
-                    {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                </button>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    {/* CHATS BUTTON */}
+                    <button onClick={() => setView('chats')} className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl transition-all active:scale-95 ${darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'}`}>
+                        <MessageSquare className="w-12 h-12" />
+                        <span className="font-black uppercase tracking-widest text-sm">Chats</span>
+                        {waitingUsers.length > 0 && <span className="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-bold">{waitingUsers.length} Waiting</span>}
+                    </button>
+
+                    {/* EVENTS BUTTON */}
+                    <button onClick={() => setView('events')} className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl transition-all active:scale-95 ${darkMode ? 'bg-purple-600 text-white' : 'bg-white text-purple-600'}`}>
+                        <Calendar className="w-12 h-12" />
+                        <span className="font-black uppercase tracking-widest text-sm">Events</span>
+                    </button>
+
+                    {/* PRICING BUTTON */}
+                    <button onClick={() => setView('prices')} className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl transition-all active:scale-95 ${darkMode ? 'bg-green-600 text-white' : 'bg-white text-green-600'}`}>
+                        <DollarSign className="w-12 h-12" />
+                        <span className="font-black uppercase tracking-widest text-sm">Pricing</span>
+                    </button>
+                    
+                    {/* SETTINGS (Placeholder) */}
+                    <button className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl opacity-50 cursor-not-allowed ${darkMode ? 'bg-gray-800' : 'bg-white'}`}>
+                        <Settings className="w-12 h-12" />
+                        <span className="font-black uppercase tracking-widest text-sm">Settings</span>
+                    </button>
+                </div>
+                
+                {/* QUICK STATS */}
+                <div className="mt-10 p-6 rounded-3xl bg-white/5 border border-white/10">
+                    <h3 className="text-xs font-bold uppercase text-gray-500 mb-4">Live Stats</h3>
+                    <div className="flex justify-between">
+                        <div className="text-center"><p className="text-2xl font-black">{allSessions.length}</p><p className="text-[10px] uppercase text-gray-500">Total Users</p></div>
+                        <div className="text-center"><p className="text-2xl font-black text-green-500">{activeUsers.filter(u => u.status === 'picking_seats').length}</p><p className="text-[10px] uppercase text-gray-500">Buying</p></div>
+                        <div className="text-center"><p className="text-2xl font-black text-orange-500">{waitingUsers.length}</p><p className="text-[10px] uppercase text-gray-500">Waiting</p></div>
+                    </div>
+                </div>
             </div>
-            
-            <div className="flex-1 overflow-y-auto">
-                {adminTab === 'chats' && (
-                    <>
-                        {waitingUsers.length > 0 && (
-                            <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap scrollbar-hide border-b border-gray-100/10">
-                                <div className="flex gap-4">
-                                    {waitingUsers.map(s => (
-                                        <div key={s.id} onClick={() => setSelectedUser(s)} className="flex flex-col items-center gap-1 cursor-pointer w-16 flex-shrink-0 group">
-                                            <div className="w-14 h-14 rounded-full border-[3px] border-[#ea0042] p-[2px]">
-                                                <div className="w-full h-full bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500 text-lg">{getAvatar(s.name)}</div>
-                                            </div>
-                                            <span className="text-[10px] font-medium truncate w-full text-center opacity-80">{s.name ? s.name.split(' ')[0] : 'Visitor'}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                        <div className="p-2 space-y-1">
-                            {activeUsers.map(s => (
-                                <div key={s.id} onClick={() => setSelectedUser(s)} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'} ${selectedUser?.id === s.id ? (darkMode ? 'bg-gray-800' : 'bg-blue-50') : ''}`}>
-                                    <div className="relative">
-                                        <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500 text-lg">{getAvatar(s.name)}</div>
-                                        {s.status === 'in_queue' && <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between items-baseline">
-                                            <h4 className={`text-sm truncate ${s.hasUnread ? 'font-black' : 'font-semibold'}`}>{s.name || 'Visitor'}</h4>
-                                            <span className="text-[10px] opacity-50">{new Date(s.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                        </div>
-                                        <p className="text-xs opacity-60 truncate">{s.email}</p>
-                                    </div>
+        )}
+
+        {/* --- VIEW: CHAT LIST --- */}
+        {view === 'chats' && (
+            <div className="flex flex-col h-screen">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+                    <h2 className="font-bold text-xl">Inbox</h2>
+                </div>
+                
+                {/* STORIES (Waiting) */}
+                {waitingUsers.length > 0 && (
+                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10">
+                        <div className="flex gap-4">
+                            {waitingUsers.map(s => (
+                                <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex flex-col items-center gap-2 cursor-pointer w-20 flex-shrink-0">
+                                    <div className="w-16 h-16 rounded-full border-4 border-red-500 p-1"><div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center font-bold text-xl">{getAvatar(s.name)}</div></div>
+                                    <span className="text-xs font-bold truncate w-full text-center">{s.name.split(' ')[0]}</span>
                                 </div>
                             ))}
                         </div>
-                    </>
+                    </div>
                 )}
-                {adminTab === 'events' && (
-                    <div className="p-4 space-y-6">
-                        <h3 className="font-black text-sm uppercase tracking-widest opacity-50 mb-4">Add New Event</h3>
-                        <div className="space-y-3">
-                            <input placeholder="Artist Name" className={`w-full p-4 rounded-xl text-sm font-bold outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
-                            <div className="flex gap-2">
-                                 <input placeholder="Venue" className={`flex-1 p-4 rounded-xl text-sm outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
-                                 <input placeholder="Date" className={`flex-1 p-4 rounded-xl text-sm outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
+
+                {/* LIST (Active) */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                    {activeUsers.map(s => (
+                        <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 cursor-pointer">
+                            <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold">{getAvatar(s.name)}</div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between"><h4 className="font-bold truncate">{s.name}</h4><span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>
+                                <p className="text-xs text-gray-400 truncate">{s.email}</p>
                             </div>
-                            <input placeholder="Image URL" className={`w-full p-4 rounded-xl text-sm outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
-                            <div className="flex gap-2">
-                                <input placeholder="Badge (High Demand)" className={`flex-1 p-4 rounded-xl text-sm outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
-                                <input placeholder="Timer (02:45:00)" className={`flex-1 p-4 rounded-xl text-sm outline-none ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
-                            </div>
-                            <button onClick={createEvent} className="w-full bg-[#0084ff] text-white py-4 rounded-xl font-bold text-sm">Publish Event</button>
                         </div>
-                        <div className="mt-8 space-y-3">
-                            <h4 className="font-black text-xs uppercase tracking-widest opacity-50">Active Events</h4>
-                            {eventsList.map(ev => (<div key={ev.id} className={`flex justify-between items-center p-4 rounded-xl border ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100 shadow-sm'}`}><span className="text-sm font-bold truncate w-40">{ev.artist}</span><button onClick={() => deleteEvent(ev.id)} className="text-red-500"><Trash2 className="w-4 h-4" /></button></div>))}
-                        </div>
-                    </div>
-                )}
-                {adminTab === 'settings' && (
-                     <div className="p-4 space-y-6">
-                        <h3 className="font-black text-sm uppercase tracking-widest opacity-50 mb-4">Pricing</h3>
-                        <div className="space-y-2"><label className="text-xs font-bold">Regular Price</label><input type="number" className={`w-full p-3 rounded-lg font-mono text-sm ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} /><button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-[#0084ff] text-white py-3 rounded-xl text-xs font-bold uppercase">Update Regular</button></div>
-                        <div className="space-y-2"><label className="text-xs font-bold">VIP Price</label><input type="number" className={`w-full p-3 rounded-lg font-mono text-sm ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`} value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} /><button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-500 text-white py-3 rounded-xl text-xs font-bold uppercase">Update VIP</button></div>
-                    </div>
-                )}
+                    ))}
+                </div>
             </div>
+        )}
 
-            <div className={`border-t p-2 flex justify-around ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-                <button onClick={()=>setAdminTab('chats')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition-all ${adminTab==='chats'?'text-[#0084ff] scale-110':'text-gray-400'}`}><MessageSquare className="w-6 h-6" /><span className="text-[10px] font-bold mt-1">Chats</span></button>
-                <button onClick={()=>setAdminTab('events')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition-all ${adminTab==='events'?'text-[#0084ff] scale-110':'text-gray-400'}`}><Calendar className="w-6 h-6" /><span className="text-[10px] font-bold mt-1">Events</span></button>
-                <button onClick={()=>setAdminTab('settings')} className={`flex flex-col items-center p-2 rounded-xl w-20 transition-all ${adminTab==='settings'?'text-[#0084ff] scale-110':'text-gray-400'}`}><Settings className="w-6 h-6" /><span className="text-[10px] font-bold mt-1">Settings</span></button>
-            </div>
-        </div>
-
-        {/* CHAT VIEW - OVERLAYS ON MOBILE */}
-        <div className={`w-full md:w-2/3 h-full flex-col ${selectedUser ? 'flex fixed inset-0 z-50 md:static' : 'hidden md:flex'} ${darkMode ? 'bg-gray-900' : 'bg-white'}`}>
-            {selectedUser ? (
-                <>
-                    <div className={`p-3 border-b flex justify-between items-center shadow-sm sticky top-0 z-20 ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => setSelectedUser(null)} className={`md:hidden p-2 rounded-full ${darkMode ? 'hover:bg-gray-800' : 'hover:bg-gray-100'}`}><ChevronLeft className="w-6 h-6 text-[#0084ff]" /></button>
-                            <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-500">{getAvatar(selectedUser.name)}</div>
-                            <div><h3 className="font-bold text-base leading-tight">{selectedUser.name || 'Visitor'}</h3><p className="text-xs opacity-60">{selectedUser.email}</p></div>
-                        </div>
-                        <div className="relative">
-                            <button onClick={() => setShowMenu(!showMenu)} className="p-2 rounded-full hover:bg-gray-100/10"><MoreVertical className="w-5 h-5" /></button>
-                            {showMenu && (
-                                <div className={`absolute top-10 right-0 shadow-xl border rounded-xl overflow-hidden z-50 w-48 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'}`}>
-                                    <button onClick={() => deleteSession(selectedUser.id)} className="w-full text-left px-4 py-3 text-red-500 hover:bg-red-500/10 text-sm font-bold flex items-center gap-2"><Trash2 className="w-4 h-4" /> Delete Session</button>
-                                </div>
-                            )}
-                        </div>
+        {/* --- VIEW: SPECIFIC CHAT --- */}
+        {view === 'specific_chat' && selectedUser && (
+            <div className="flex flex-col h-screen fixed inset-0 z-50 bg-[#0a0e14]">
+                {/* Header */}
+                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d]">
+                    <div className="flex items-center gap-3">
+                        <button onClick={() => setView('chats')}><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">{getAvatar(selectedUser.name)}</div>
+                        <div><h3 className="font-bold">{selectedUser.name}</h3><p className="text-xs text-gray-400">{selectedUser.email}</p></div>
                     </div>
+                    <div className="flex gap-2">
+                        {selectedUser.status === 'waiting_approval' ? (
+                            <><button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-600 p-2 rounded-full text-white"><Check className="w-4 h-4" /></button>
+                            <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-600 p-2 rounded-full text-white"><Ban className="w-4 h-4" /></button></>
+                        ) : (
+                            <button onClick={() => deleteSession(selectedUser.id)} className="p-2 bg-red-500/20 text-red-500 rounded-full"><Trash2 className="w-5 h-5" /></button>
+                        )}
+                    </div>
+                </div>
 
-                    <div className={`flex-1 overflow-y-auto p-4 space-y-2 ${darkMode ? 'bg-gray-900' : 'bg-white'}`} onClick={() => setShowMenu(false)}>
-                         {selectedUser.status === 'waiting_approval' && (
-                             <div className="bg-orange-100 border border-orange-200 p-4 rounded-xl text-center mb-4">
-                                 <p className="text-orange-800 font-bold text-sm mb-3">User is waiting for approval</p>
-                                 <div className="flex justify-center gap-4">
-                                     <button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-500 text-white px-6 py-2 rounded-full font-bold uppercase text-xs shadow-lg">Approve</button>
-                                     <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-500 text-white px-6 py-2 rounded-full font-bold uppercase text-xs shadow-lg">Deny</button>
-                                 </div>
-                             </div>
-                         )}
-                        {(selectedUser.chatHistory || []).map((m, i) => (
-                            <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
-                                <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-[#0084ff] text-white': (darkMode ? 'bg-gray-800' : 'bg-[#f0f0f0] text-black')}`}>{m.text}</div>
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {(selectedUser.chatHistory || []).map((m, i) => (
+                        <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
+                            <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white':'bg-gray-700 text-white'}`}>{m.text}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Input */}
+                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3">
+                    <div className="flex gap-2">
+                        <input className="flex-1 bg-black/20 rounded-full px-4 py-3 text-sm outline-none text-white border border-white/10" placeholder="Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
+                        <button onClick={sendAdminMessage} className="p-3 bg-blue-600 rounded-full text-white"><Send className="w-5 h-5" /></button>
+                    </div>
+                    <div className="flex gap-2">
+                        <input className="flex-1 bg-red-900/20 rounded-full px-4 py-2 text-xs outline-none text-red-400 border border-red-900/50" placeholder="Priority Alert..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} />
+                        <button onClick={sendAdminPing} className="p-2 bg-red-600 rounded-full text-white"><Bell className="w-4 h-4" /></button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* --- VIEW: EVENTS MANAGER --- */}
+        {view === 'events' && (
+            <div className="flex flex-col h-screen">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+                    <h2 className="font-bold text-xl">Manage Events</h2>
+                </div>
+                <div className="p-6 space-y-4 overflow-y-auto">
+                    <input placeholder="Artist" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
+                    <input placeholder="Venue" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
+                    <input placeholder="Date" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
+                    <input placeholder="Image URL" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                    <div className="flex gap-2">
+                        <input placeholder="Badge" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
+                        <input placeholder="Timer" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
+                    </div>
+                    <button onClick={createEvent} className="w-full bg-purple-600 text-white py-4 rounded-xl font-bold uppercase">Publish</button>
+                    
+                    <div className="mt-8 space-y-4">
+                        {eventsList.map(ev => (
+                            <div key={ev.id} className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
+                                <div><h4 className="font-bold">{ev.artist}</h4><p className="text-xs text-gray-400">{ev.date}</p></div>
+                                <button onClick={() => deleteEvent(ev.id)} className="text-red-500"><Trash2 className="w-5 h-5" /></button>
                             </div>
                         ))}
                     </div>
-
-                    <div className={`p-3 border-t ${darkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-200'}`}>
-                        <div className={`flex items-center gap-2 p-1 rounded-full ${darkMode ? 'bg-gray-800' : 'bg-gray-100'}`}>
-                            <input className="flex-1 bg-transparent px-4 py-2 text-sm outline-none placeholder:text-gray-500" placeholder="Aa" value={adminMsg} onChange={e => setAdminMsg(e.target.value)} onKeyPress={e => e.key === 'Enter' && sendAdminMessage()} />
-                            <button onClick={sendAdminMessage} className="p-2 rounded-full text-[#0084ff] hover:bg-blue-100/10"><Send className="w-5 h-5" /></button>
-                        </div>
-                        <div className="mt-2 flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                            <button onClick={() => { setAdminMsg("Access Granted. Welcome!"); setTimeout(sendAdminMessage, 100); }} className={`border px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${darkMode ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>👋 Welcome</button>
-                            <div className="flex items-center gap-2 flex-1 ml-2">
-                                <input className={`flex-1 border rounded-full px-3 py-1.5 text-xs outline-none ${darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-red-50 border-red-100 text-red-600'}`} placeholder="Alert..." value={adminAlert} onChange={e=>setAdminAlert(e.target.value)} />
-                                <button onClick={sendAdminPing} className="p-1.5 bg-red-500 rounded-full text-white"><Bell className="w-3 h-3" /></button>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            ) : (
-                <div className={`hidden md:flex flex-1 flex-col items-center justify-center ${darkMode ? 'text-gray-700' : 'text-gray-300'}`}>
-                    <MessageSquare className="w-20 h-20 mb-4 opacity-20" />
-                    <p className="font-bold text-sm uppercase tracking-widest">Select a chat to start messaging</p>
                 </div>
-            )}
-        </div>
+            </div>
+        )}
+
+        {/* --- VIEW: PRICING --- */}
+        {view === 'prices' && (
+            <div className="flex flex-col h-screen">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+                    <h2 className="font-bold text-xl">Pricing Control</h2>
+                </div>
+                <div className="p-6 space-y-8">
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-blue-400">Regular Seat Price</label>
+                        <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
+                        <button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-blue-600 py-3 rounded-xl font-bold uppercase">Update Regular</button>
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase text-pink-500">VIP Seat Price</label>
+                        <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} />
+                        <button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-600 py-3 rounded-xl font-bold uppercase">Update VIP</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
     </div>
   );
 }
