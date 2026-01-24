@@ -29,7 +29,6 @@ export default function AdminApp() {
 
   // --- SYNC ---
   useEffect(() => {
-    // Sessions: Removed orderBy to prevent index crash, sort manually
     const unsubSessions = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), (snap) => {
         const users = snap.docs.map(d => ({id: d.id, ...d.data()}));
         users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -87,12 +86,11 @@ export default function AdminApp() {
 
   // --- RENDER ---
   return (
-    // Fixed inset-0 guarantees full screen on mobile without scrolling issues
-    <div className={`fixed inset-0 font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
+    <div className={`h-screen w-screen overflow-hidden font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`} style={{ height: '100dvh' }}>
         
         {/* --- VIEW: DASHBOARD (MENU) --- */}
         {view === 'dashboard' && (
-            <div className="p-6 max-w-lg mx-auto h-full overflow-y-auto">
+            <div className="h-full overflow-y-auto p-6 max-w-lg mx-auto">
                 <div className="flex justify-between items-center mb-10">
                     <h1 className="text-3xl font-black uppercase italic tracking-tighter">War Room</h1>
                     <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-full bg-white/10">{darkMode ? <Sun /> : <Moon />}</button>
@@ -103,7 +101,7 @@ export default function AdminApp() {
                     <button onClick={() => setView('chats')} className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl transition-all active:scale-95 ${darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'}`}>
                         <MessageSquare className="w-12 h-12" />
                         <span className="font-black uppercase tracking-widest text-sm">Chats</span>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-center">
                              <span className="bg-black/20 text-white text-xs px-2 py-1 rounded-lg font-bold">{allSessions.length} Total</span>
                              {waitingUsers.length > 0 && <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-lg font-bold">{waitingUsers.length} Wait</span>}
                         </div>
@@ -130,42 +128,49 @@ export default function AdminApp() {
             </div>
         )}
 
-        {/* --- VIEW: CHAT LIST (FIXED FOR MOBILE) --- */}
+        {/* --- VIEW: CHAT LIST (MOBILE OPTIMIZED) --- */}
         {view === 'chats' && (
-            <div className="flex flex-col h-full max-h-full overflow-hidden">
-                {/* Header - Fixed Height */}
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
-                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+            <div className="h-full flex flex-col">
+                {/* Header */}
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 shrink-0 bg-inherit">
+                    <button onClick={() => setView('dashboard')} className="touch-manipulation"><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Inbox ({allSessions.length})</h2>
                 </div>
                 
-                {/* STORIES (Waiting) - Fixed Height */}
+                {/* STORIES (Waiting) */}
                 {waitingUsers.length > 0 && (
-                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10 flex-shrink-0">
-                        <div className="flex gap-4">
+                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10 shrink-0 bg-inherit">
+                        <div className="flex gap-4 pb-2">
                             {waitingUsers.map(s => (
-                                <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex flex-col items-center gap-2 cursor-pointer w-20 flex-shrink-0">
-                                    <div className="w-16 h-16 rounded-full border-4 border-red-500 p-1"><div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center font-bold text-xl">{getAvatar(s.name)}</div></div>
+                                <button key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex flex-col items-center gap-2 w-20 shrink-0 touch-manipulation">
+                                    <div className="w-16 h-16 rounded-full border-4 border-red-500 p-1">
+                                        <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center font-bold text-xl">{getAvatar(s.name)}</div>
+                                    </div>
                                     <span className="text-xs font-bold truncate w-full text-center">{s.name ? s.name.split(' ')[0] : 'Visitor'}</span>
-                                </div>
+                                </button>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* LIST (Active) - SCROLLABLE AREA */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+                {/* LIST (Active) - KEY FIX HERE */}
+                <div className="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2" style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
                     {allSessions.length === 0 ? (
                         <div className="p-10 text-center opacity-50">No users found...</div>
+                    ) : activeUsers.length === 0 && waitingUsers.length > 0 ? (
+                        <div className="p-10 text-center opacity-50">All users are waiting for approval</div>
                     ) : (
                         activeUsers.map(s => (
-                            <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 active:bg-white/20">
-                                <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold flex-shrink-0">{getAvatar(s.name)}</div>
+                            <button key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 active:bg-white/20 touch-manipulation text-left">
+                                <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold shrink-0">{getAvatar(s.name)}</div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between"><h4 className="font-bold truncate">{s.name || 'Visitor'}</h4><span className="text-xs text-gray-500 flex-shrink-0 ml-2">{new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>
-                                    <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                                    <div className="flex justify-between items-start gap-2">
+                                        <h4 className="font-bold truncate">{s.name || 'Visitor'}</h4>
+                                        <span className="text-xs text-gray-500 shrink-0 whitespace-nowrap">{new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 truncate">{s.email || 'No email'}</p>
                                 </div>
-                            </div>
+                            </button>
                         ))
                     )}
                 </div>
@@ -174,42 +179,51 @@ export default function AdminApp() {
 
         {/* --- VIEW: SPECIFIC CHAT --- */}
         {view === 'specific_chat' && selectedUser && (
-            <div className="flex flex-col h-full fixed inset-0 z-50 bg-[#0a0e14]">
+            <div className="h-full flex flex-col bg-[#0a0e14]">
                 {/* Header */}
-                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d] flex-shrink-0">
-                    <div className="flex items-center gap-3">
-                        <button onClick={() => setView('chats')}><ChevronLeft className="w-6 h-6" /></button>
-                        <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">{getAvatar(selectedUser.name)}</div>
-                        <div><h3 className="font-bold">{selectedUser.name}</h3><p className="text-xs text-gray-400">{selectedUser.email}</p></div>
+                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d] shrink-0">
+                    <div className="flex items-center gap-3 min-w-0">
+                        <button onClick={() => setView('chats')} className="touch-manipulation shrink-0"><ChevronLeft className="w-6 h-6" /></button>
+                        <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold shrink-0">{getAvatar(selectedUser.name)}</div>
+                        <div className="min-w-0">
+                            <h3 className="font-bold truncate">{selectedUser.name || 'Visitor'}</h3>
+                            <p className="text-xs text-gray-400 truncate">{selectedUser.email || 'No email'}</p>
+                        </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                         {selectedUser.status === 'waiting_approval' ? (
-                            <><button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-600 p-2 rounded-full text-white"><Check className="w-4 h-4" /></button>
-                            <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-600 p-2 rounded-full text-white"><Ban className="w-4 h-4" /></button></>
+                            <>
+                                <button onClick={() => updateSessionStatus(selectedUser.id, 'allowed')} className="bg-green-600 p-2 rounded-full text-white touch-manipulation"><Check className="w-4 h-4" /></button>
+                                <button onClick={() => updateSessionStatus(selectedUser.id, 'denied')} className="bg-red-600 p-2 rounded-full text-white touch-manipulation"><Ban className="w-4 h-4" /></button>
+                            </>
                         ) : (
-                            <button onClick={() => deleteSession(selectedUser.id)} className="p-2 bg-red-500/20 text-red-500 rounded-full"><Trash2 className="w-5 h-5" /></button>
+                            <button onClick={() => deleteSession(selectedUser.id)} className="p-2 bg-red-500/20 text-red-500 rounded-full touch-manipulation"><Trash2 className="w-5 h-5" /></button>
                         )}
                     </div>
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-                    {(selectedUser.chatHistory || []).map((m, i) => (
-                        <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
-                            <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white':'bg-gray-700 text-white'}`}>{m.text}</div>
-                        </div>
-                    ))}
+                <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-3" style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
+                    {(selectedUser.chatHistory || []).length === 0 ? (
+                        <div className="p-10 text-center opacity-50">No messages yet</div>
+                    ) : (
+                        selectedUser.chatHistory.map((m, i) => (
+                            <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
+                                <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white':'bg-gray-700 text-white'}`}>{m.text}</div>
+                            </div>
+                        ))
+                    )}
                 </div>
 
                 {/* Input */}
-                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3 flex-shrink-0">
+                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3 shrink-0">
                     <div className="flex gap-2">
-                        <input className="flex-1 bg-black/20 rounded-full px-4 py-3 text-sm outline-none text-white border border-white/10" placeholder="Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
-                        <button onClick={sendAdminMessage} className="p-3 bg-blue-600 rounded-full text-white"><Send className="w-5 h-5" /></button>
+                        <input className="flex-1 bg-black/20 rounded-full px-4 py-3 text-sm outline-none text-white border border-white/10" placeholder="Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAdminMessage()} />
+                        <button onClick={sendAdminMessage} className="p-3 bg-blue-600 rounded-full text-white touch-manipulation"><Send className="w-5 h-5" /></button>
                     </div>
                     <div className="flex gap-2">
-                        <input className="flex-1 bg-red-900/20 rounded-full px-4 py-2 text-xs outline-none text-red-400 border border-red-900/50" placeholder="Priority Alert..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} />
-                        <button onClick={sendAdminPing} className="p-2 bg-red-600 rounded-full text-white"><Bell className="w-4 h-4" /></button>
+                        <input className="flex-1 bg-red-900/20 rounded-full px-4 py-2 text-xs outline-none text-red-400 border border-red-900/50" placeholder="Priority Alert..." value={adminAlert} onChange={e => setAdminAlert(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendAdminPing()} />
+                        <button onClick={sendAdminPing} className="p-2 bg-red-600 rounded-full text-white touch-manipulation"><Bell className="w-4 h-4" /></button>
                     </div>
                 </div>
             </div>
@@ -217,27 +231,27 @@ export default function AdminApp() {
 
         {/* --- VIEW: EVENTS MANAGER --- */}
         {view === 'events' && (
-            <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
-                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+            <div className="h-full flex flex-col">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 shrink-0">
+                    <button onClick={() => setView('dashboard')} className="touch-manipulation"><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Manage Events</h2>
                 </div>
-                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-4" style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
                     <input placeholder="Artist Name" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
                     <input placeholder="Venue" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
                     <input placeholder="Date (e.g. Sat • Aug 17)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
-                    <input placeholder="Image URL (Right click image -> Copy Link)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                    <input placeholder="Image URL" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
                     <div className="flex gap-2">
                         <input placeholder="Badge" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
                         <input placeholder="Timer" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
                     </div>
-                    <button onClick={createEvent} className="w-full bg-purple-600 text-white py-4 rounded-xl font-bold uppercase">Publish</button>
+                    <button onClick={createEvent} className="w-full bg-purple-600 text-white py-4 rounded-xl font-bold uppercase touch-manipulation">Publish</button>
                     
                     <div className="mt-8 space-y-4">
                         {eventsList.map(ev => (
                             <div key={ev.id} className="flex justify-between items-center bg-white/5 p-4 rounded-xl border border-white/10">
-                                <div><h4 className="font-bold">{ev.artist}</h4><p className="text-xs text-gray-400">{ev.date}</p></div>
-                                <button onClick={() => deleteEvent(ev.id)} className="text-red-500"><Trash2 className="w-5 h-5" /></button>
+                                <div className="min-w-0 flex-1"><h4 className="font-bold truncate">{ev.artist}</h4><p className="text-xs text-gray-400 truncate">{ev.date}</p></div>
+                                <button onClick={() => deleteEvent(ev.id)} className="text-red-500 shrink-0 ml-2 touch-manipulation"><Trash2 className="w-5 h-5" /></button>
                             </div>
                         ))}
                     </div>
@@ -247,21 +261,21 @@ export default function AdminApp() {
 
         {/* --- VIEW: PRICING --- */}
         {view === 'prices' && (
-            <div className="flex flex-col h-full">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
-                    <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
+            <div className="h-full flex flex-col">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 shrink-0">
+                    <button onClick={() => setView('dashboard')} className="touch-manipulation"><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Pricing Control</h2>
                 </div>
-                <div className="p-6 space-y-8 flex-1 overflow-y-auto">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-6 space-y-8" style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}>
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-blue-400">Regular Seat Price</label>
                         <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
-                        <button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-blue-600 py-3 rounded-xl font-bold uppercase">Update Regular</button>
+                        <button onClick={() => updateGlobalPrice('regularPrice', globalSettings.regularPrice)} className="w-full bg-blue-600 py-3 rounded-xl font-bold uppercase touch-manipulation">Update Regular</button>
                     </div>
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-pink-500">VIP Seat Price</label>
                         <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.vipPrice} onChange={e => setGlobalSettings({...globalSettings, vipPrice: e.target.value})} />
-                        <button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-600 py-3 rounded-xl font-bold uppercase">Update VIP</button>
+                        <button onClick={() => updateGlobalPrice('vipPrice', globalSettings.vipPrice)} className="w-full bg-pink-600 py-3 rounded-xl font-bold uppercase touch-manipulation">Update VIP</button>
                     </div>
                 </div>
             </div>
@@ -270,5 +284,3 @@ export default function AdminApp() {
     </div>
   );
 }
-
-
