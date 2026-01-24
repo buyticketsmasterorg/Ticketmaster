@@ -13,7 +13,7 @@ const firebaseConfig = {
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_APP_ID
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
@@ -26,9 +26,14 @@ export default function UserApp() {
   const [region, setRegion] = useState(localStorage.getItem('user_region') || null);
   const [showRegionList, setShowRegionList] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [sessionReady, setSessionReady] = useState(false); // FIXED: Added session gate
   const [authLoading, setAuthLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState('auth'); 
-  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(() => {
+    // FIXED: Persist event on refresh
+    const saved = sessionStorage.getItem('tm_active_event');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [cart, setCart] = useState([]); 
   const [showTicketOverlay, setShowTicketOverlay] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -50,7 +55,14 @@ export default function UserApp() {
   const currencyMap = { 'UK': '£', 'USA': '$', 'FRANCE': '€' };
   const currency = currencyMap[region] || '$';
 
-  // --- 5s AUTO-VERIFY & QUEUE FLOW ---
+  // --- PERSIST EVENT SELECTION ---
+  useEffect(() => {
+    if (selectedEvent) {
+      sessionStorage.setItem('tm_active_event', JSON.stringify(selectedEvent));
+    }
+  }, [selectedEvent]);
+
+  // --- QUEUE LOGIC ---
   useEffect(() => {
     if (currentPage === 'waiting_room') {
       const timer = setTimeout(() => { setCurrentPage('queue'); }, 5000);
@@ -59,7 +71,7 @@ export default function UserApp() {
     if (currentPage === 'queue') {
       const interval = setInterval(() => {
         setQueuePosition(prev => {
-          const next = prev - (Math.floor(Math.random() * 50) + 10);
+          const next = prev - (Math.floor(Math.random() * 60) + 20);
           setQueueProgress(((2431 - next) / 2431) * 100);
           if (next <= 0) { clearInterval(interval); setCurrentPage('seatmap'); return 0; }
           return next;
@@ -69,23 +81,24 @@ export default function UserApp() {
     }
   }, [currentPage]);
 
-  // --- STABLE AUTH OBSERVER (NO LOOP) ---
+  // --- STABLE AUTH & SESSION SYNC ---
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
         if (!u) { 
             setUser(null); 
             setCurrentPage('auth'); 
+            setSessionReady(true);
             setIsLoading(false); 
         } else { 
             setUser(u); 
             await findOrCreateSession(u); 
+            setSessionReady(true); // FIXED: Release the gate only after session is linked
             setIsLoading(false); 
         }
     });
     return () => unsub();
-  }, []); // Empty dependency array prevents infinite loops
+  }, []);
 
-  // --- ADMIN DUPLICATE FIX ---
   const findOrCreateSession = async (authUser) => {
       try {
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), where("userId", "==", authUser.uid));
@@ -104,7 +117,7 @@ export default function UserApp() {
                 status: 'browsing', 
                 accessGranted: 'pending', 
                 ticketStatus: 'none',
-                chatHistory: [{ sender: 'system', text: 'Verified session.', timestamp: new Date().toISOString() }],
+                chatHistory: [{ sender: 'system', text: 'Secure session linked.', timestamp: new Date().toISOString() }],
                 notifications: []
               });
               sid = docRef.id;
@@ -113,11 +126,10 @@ export default function UserApp() {
           sessionStorage.setItem('tm_sid', sid);
           if (currentPage === 'auth') setCurrentPage('home');
       } catch (e) {
-          console.error("Firebase Session Error:", e);
+          console.error("Session Link Error:", e);
       }
   };
 
-  // --- DATA LISTENER ---
   useEffect(() => {
     if (!currentSessionId) return;
     const unsub = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), (snap) => {
@@ -144,29 +156,32 @@ export default function UserApp() {
       window.location.reload();
   };
 
-  const handleLoginSubmit = async () => {
+  const handleAuthAction = async () => {
+      setAuthError('');
       setAuthLoading(true);
       try {
-          await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
+          if (authMode === 'signup') {
+              const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
+              await updateProfile(cred.user, { displayName: tempUser.name });
+          } else {
+              await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
+          }
       } catch (e) {
-          setAuthError("Invalid credentials");
+          setAuthError(e.message.includes('auth/invalid-credential') ? "Invalid Email or Password" : e.message);
       }
       setAuthLoading(false);
   };
 
-  const handleSignupSubmit = async () => {
-      setAuthLoading(true);
-      try {
-          const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
-          await updateProfile(cred.user, { displayName: tempUser.name });
-      } catch (e) {
-          setAuthError(e.message);
-      }
-      setAuthLoading(false);
-  };
+  // FIXED: Consolidated Loading Screen
+  if (isLoading || !sessionReady) {
+    return (
+      <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
-  if (isLoading) return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
-
+  // REGION SPLASH
   if (!region) {
       return (
           <div className="fixed inset-0 z-[500] bg-[#0a0e14] flex flex-col items-center justify-center p-6 text-center">
@@ -196,7 +211,8 @@ export default function UserApp() {
   return (
     <div className="min-h-screen bg-[#0a0e14] text-gray-100 font-sans">
       
-      {currentPage !== 'auth' && currentPage !== 'waiting_room' && currentPage !== 'queue' && (
+      {/* HEADER: Hidden during Auth/Queue stages for clean look */}
+      {['home', 'seatmap', 'checkout', 'success'].includes(currentPage) && (
         <header className="fixed top-0 w-full z-50 bg-[#1f262d]/95 backdrop-blur-xl border-b border-white/5 h-16 flex items-center justify-between px-6 shadow-2xl">
             <div className="flex items-center gap-1 cursor-pointer" onClick={() => setCurrentPage('home')}>
                 <span className="font-extrabold text-xl tracking-tighter italic text-white">ticketmaster</span>
@@ -212,8 +228,9 @@ export default function UserApp() {
         </header>
       )}
 
-      <main className={`${currentPage === 'auth' || currentPage === 'waiting_room' || currentPage === 'queue' ? '' : 'pt-20 px-4 max-w-7xl mx-auto'}`}>
+      <main className={`${['home', 'seatmap', 'checkout', 'success'].includes(currentPage) ? 'pt-20 px-4 max-w-7xl mx-auto' : ''}`}>
         
+        {/* AUTH */}
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl space-y-6">
@@ -231,15 +248,18 @@ export default function UserApp() {
                      <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Email" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
                      <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Password" value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
                  </div>
-                 {authError && <p className="text-xs text-red-500 font-bold text-center">{authError}</p>}
-                 <button onClick={authMode === 'signup' ? handleSignupSubmit : handleLoginSubmit} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic shadow-lg">
-                     {authLoading ? "..." : (authMode === 'signup' ? "Join" : "Login")}
+                 {authError && <p className="text-[10px] text-red-500 font-bold text-center uppercase tracking-widest">{authError}</p>}
+                 <button onClick={handleAuthAction} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic shadow-lg active:scale-95 transition-all">
+                     {authLoading ? "Validating..." : (authMode === 'signup' ? "Join" : "Login")}
                  </button>
-                 <button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="w-full text-xs font-bold text-gray-400 uppercase tracking-widest">{authMode === 'signup' ? "Already a member?" : "Create account?"}</button>
+                 <button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="w-full text-xs font-bold text-gray-400 uppercase tracking-widest">
+                    {authMode === 'signup' ? "Existing Member?" : "Create account?"}
+                 </button>
               </div>
            </div>
         )}
 
+        {/* WAITING ROOM */}
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6">
                <div className="w-16 h-16 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
@@ -247,28 +267,31 @@ export default function UserApp() {
            </div>
         )}
 
+        {/* QUEUE */}
         {currentPage === 'queue' && (
-           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12">
+           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12 animate-fadeIn">
                <div className="space-y-4">
                    <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                    <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
                </div>
                <div className="w-full max-w-md bg-white/10 h-3 rounded-full overflow-hidden border border-white/10">
-                   <div className="h-full bg-[#026cdf]" style={{ width: `${queueProgress}%` }} />
+                   <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${queueProgress}%` }} />
                </div>
+               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Do not refresh this page</p>
            </div>
         )}
 
+        {/* HOME PAGE */}
         {currentPage === 'home' && (
             <div className="space-y-8 animate-fadeIn">
                 <div className="relative h-64 rounded-[32px] overflow-hidden">
                     <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] to-transparent" />
-                    <div className="absolute bottom-8 left-8"><h1 className="text-4xl font-black italic uppercase text-white">Live Events</h1></div>
+                    <div className="absolute bottom-8 left-8"><h1 className="text-4xl font-black italic uppercase text-white">Verified Events</h1></div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {[{id:1, artist: "Exclusive Access", image: "https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000"}].map(ev => (
-                        <div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] p-4 hover:border-[#026cdf] cursor-pointer">
+                        <div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] p-4 hover:border-[#026cdf] cursor-pointer active:scale-95 transition-all">
                             <img src={ev.image} className="w-full h-40 object-cover rounded-[24px] mb-4" />
                             <h3 className="text-xl font-black italic uppercase text-white">{ev.artist}</h3>
                         </div>
@@ -277,7 +300,17 @@ export default function UserApp() {
             </div>
         )}
 
-        {currentPage === 'seatmap' && selectedEvent && <SeatMap event={selectedEvent} currency={currency} regularPrice={globalSettings.regularPrice} vipPrice={globalSettings.vipPrice} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />}
+        {/* SEATMAP: Added fallback spinner for race conditions */}
+        {currentPage === 'seatmap' && (
+          selectedEvent ? (
+            <SeatMap event={selectedEvent} currency={currency} regularPrice={globalSettings.regularPrice} vipPrice={globalSettings.vipPrice} cart={cart} setCart={setCart} onCheckout={() => setCurrentPage('checkout')} />
+          ) : (
+            <div className="fixed inset-0 bg-[#0a0e14] flex items-center justify-center">
+              <div className="w-10 h-10 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )
+        )}
+
         {currentPage === 'checkout' && <Checkout cart={cart} currency={currency} onBack={() => setCurrentPage('seatmap')} onSuccess={() => { setCart([]); setCurrentPage('success'); }} />}
         
         {currentPage === 'success' && (
@@ -291,25 +324,26 @@ export default function UserApp() {
 
       {/* TICKET OVERLAY */}
       {showTicketOverlay && (
-          <div className="fixed inset-0 z-[400] bg-black/95 flex items-end justify-center">
+          <div className="fixed inset-0 z-[400] bg-black/95 flex items-end justify-center animate-fadeIn">
               <div className="w-full max-w-lg bg-white rounded-t-[40px] h-[85vh] overflow-hidden flex flex-col animate-slideUp">
                   <div className="p-6 flex justify-between items-center border-b border-gray-100">
-                      <span className="font-black italic uppercase text-black">Digital Pass</span>
+                      <span className="font-black italic uppercase text-black">Digital Entry Pass</span>
                       <button onClick={() => setShowTicketOverlay(false)} className="p-2 bg-gray-100 rounded-full text-black"><X className="w-5 h-5" /></button>
                   </div>
                   <div className="flex-1 p-8 text-black text-center">
                       {sessionData?.ticketStatus === 'issued' ? (
                           <div className="space-y-6">
-                              <h3 className="text-3xl font-black italic uppercase">Verified Entry</h3>
+                              <h3 className="text-3xl font-black italic uppercase leading-none">Verified</h3>
                               <div className="bg-gray-100 p-8 rounded-[32px] relative overflow-hidden flex flex-col items-center">
-                                  <div className="absolute top-0 left-0 w-full h-1 bg-[#026cdf] animate-scan" />
+                                  <div className="absolute top-0 left-0 w-full h-1 bg-[#026cdf] animate-scan shadow-[0_0_15px_#026cdf]" />
                                   <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VERIFIED" className="w-48 h-48" />
                               </div>
+                              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Secure Scan Active</p>
                           </div>
                       ) : (
                           <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-40">
-                              <Ticket className="w-12 h-12" />
-                              <p className="font-black uppercase italic text-sm">No tickets found.</p>
+                              <Ticket className="w-12 h-12 text-gray-400" />
+                              <p className="font-black uppercase italic text-sm text-gray-500">No active tickets found.</p>
                           </div>
                       )}
                   </div>
@@ -324,14 +358,14 @@ export default function UserApp() {
                   {isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}
               </button>
               {isChatOpen && (
-                  <div className="bg-white w-[90vw] max-w-sm h-full rounded-t-[24px] shadow-2xl flex flex-col overflow-hidden">
-                      <div className="bg-[#1f262d] p-4 text-white font-bold text-sm">Support</div>
+                  <div className="bg-white w-[90vw] max-w-sm h-full rounded-t-[24px] shadow-2xl flex flex-col overflow-hidden animate-slideUp">
+                      <div className="bg-[#1f262d] p-4 text-white font-bold text-sm">Secure Support</div>
                       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                           {chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`p-3 rounded-2xl text-[12px] font-bold ${m.sender==='user'?'bg-[#026cdf] text-white':'bg-white text-black border'}`}>{m.text}</div></div>))}
                       </div>
                       <div className="p-3 bg-white border-t flex gap-2">
                           <input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 outline-none text-black font-bold" placeholder="Message..." />
-                          <button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()){ updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), { chatHistory: [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}] }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl"><Send className="w-4 h-4 text-white" /></button>
+                          <button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()){ updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), { chatHistory: [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}] }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl active:scale-95 transition-all"><Send className="w-4 h-4 text-white" /></button>
                       </div>
                   </div>
               )}
