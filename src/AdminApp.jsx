@@ -17,7 +17,7 @@ const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 export default function AdminApp() {
-  const [view, setView] = useState('dashboard'); // dashboard, chats, events, prices, specific_chat
+  const [view, setView] = useState('dashboard'); 
   const [allSessions, setAllSessions] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null); 
   const [adminMsg, setAdminMsg] = useState('');
@@ -25,12 +25,16 @@ export default function AdminApp() {
   const [globalSettings, setGlobalSettings] = useState({ regularPrice: 150, vipPrice: 450 });
   const [newEvent, setNewEvent] = useState({ artist: '', venue: '', date: '', image: '', badge: '', timer: '' });
   const [eventsList, setEventsList] = useState([]);
-  const [darkMode, setDarkMode] = useState(true); // Default Dark for "War Room" feel
+  const [darkMode, setDarkMode] = useState(true);
 
   // --- SYNC ---
   useEffect(() => {
-    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), orderBy('createdAt', 'desc'));
-    const unsubSessions = onSnapshot(q, (snap) => setAllSessions(snap.docs.map(d => ({id: d.id, ...d.data()}))));
+    // Sessions: Removed orderBy to prevent index crash, sort manually
+    const unsubSessions = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'sessions'), (snap) => {
+        const users = snap.docs.map(d => ({id: d.id, ...d.data()}));
+        users.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setAllSessions(users);
+    });
 
     const unsubSettings = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'config', 'global_settings'), (snap) => {
         if(snap.exists()) setGlobalSettings(snap.data());
@@ -83,11 +87,12 @@ export default function AdminApp() {
 
   // --- RENDER ---
   return (
-    <div className={`min-h-screen font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
+    // Fixed inset-0 guarantees full screen on mobile without scrolling issues
+    <div className={`fixed inset-0 font-sans ${darkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
         
         {/* --- VIEW: DASHBOARD (MENU) --- */}
         {view === 'dashboard' && (
-            <div className="p-6 max-w-lg mx-auto">
+            <div className="p-6 max-w-lg mx-auto h-full overflow-y-auto">
                 <div className="flex justify-between items-center mb-10">
                     <h1 className="text-3xl font-black uppercase italic tracking-tighter">War Room</h1>
                     <button onClick={() => setDarkMode(!darkMode)} className="p-3 rounded-full bg-white/10">{darkMode ? <Sun /> : <Moon />}</button>
@@ -98,7 +103,10 @@ export default function AdminApp() {
                     <button onClick={() => setView('chats')} className={`p-6 rounded-3xl flex flex-col items-center justify-center gap-4 aspect-square shadow-xl transition-all active:scale-95 ${darkMode ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'}`}>
                         <MessageSquare className="w-12 h-12" />
                         <span className="font-black uppercase tracking-widest text-sm">Chats</span>
-                        {waitingUsers.length > 0 && <span className="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-bold">{waitingUsers.length} Waiting</span>}
+                        <div className="flex gap-2">
+                             <span className="bg-black/20 text-white text-xs px-2 py-1 rounded-lg font-bold">{allSessions.length} Total</span>
+                             {waitingUsers.length > 0 && <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-lg font-bold">{waitingUsers.length} Wait</span>}
+                        </div>
                     </button>
 
                     {/* EVENTS BUTTON */}
@@ -119,61 +127,56 @@ export default function AdminApp() {
                         <span className="font-black uppercase tracking-widest text-sm">Settings</span>
                     </button>
                 </div>
-                
-                {/* QUICK STATS */}
-                <div className="mt-10 p-6 rounded-3xl bg-white/5 border border-white/10">
-                    <h3 className="text-xs font-bold uppercase text-gray-500 mb-4">Live Stats</h3>
-                    <div className="flex justify-between">
-                        <div className="text-center"><p className="text-2xl font-black">{allSessions.length}</p><p className="text-[10px] uppercase text-gray-500">Total Users</p></div>
-                        <div className="text-center"><p className="text-2xl font-black text-green-500">{activeUsers.filter(u => u.status === 'picking_seats').length}</p><p className="text-[10px] uppercase text-gray-500">Buying</p></div>
-                        <div className="text-center"><p className="text-2xl font-black text-orange-500">{waitingUsers.length}</p><p className="text-[10px] uppercase text-gray-500">Waiting</p></div>
-                    </div>
-                </div>
             </div>
         )}
 
-        {/* --- VIEW: CHAT LIST --- */}
+        {/* --- VIEW: CHAT LIST (FIXED FOR MOBILE) --- */}
         {view === 'chats' && (
-            <div className="flex flex-col h-screen">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+            <div className="flex flex-col h-full max-h-full overflow-hidden">
+                {/* Header - Fixed Height */}
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
                     <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
-                    <h2 className="font-bold text-xl">Inbox</h2>
+                    <h2 className="font-bold text-xl">Inbox ({allSessions.length})</h2>
                 </div>
                 
-                {/* STORIES (Waiting) */}
+                {/* STORIES (Waiting) - Fixed Height */}
                 {waitingUsers.length > 0 && (
-                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10">
+                    <div className="py-4 pl-4 overflow-x-auto whitespace-nowrap border-b border-white/10 flex-shrink-0">
                         <div className="flex gap-4">
                             {waitingUsers.map(s => (
                                 <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex flex-col items-center gap-2 cursor-pointer w-20 flex-shrink-0">
                                     <div className="w-16 h-16 rounded-full border-4 border-red-500 p-1"><div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center font-bold text-xl">{getAvatar(s.name)}</div></div>
-                                    <span className="text-xs font-bold truncate w-full text-center">{s.name.split(' ')[0]}</span>
+                                    <span className="text-xs font-bold truncate w-full text-center">{s.name ? s.name.split(' ')[0] : 'Visitor'}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* LIST (Active) */}
-                <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                    {activeUsers.map(s => (
-                        <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 cursor-pointer">
-                            <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold">{getAvatar(s.name)}</div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex justify-between"><h4 className="font-bold truncate">{s.name}</h4><span className="text-xs text-gray-500">{new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>
-                                <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                {/* LIST (Active) - SCROLLABLE AREA */}
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+                    {allSessions.length === 0 ? (
+                        <div className="p-10 text-center opacity-50">No users found...</div>
+                    ) : (
+                        activeUsers.map(s => (
+                            <div key={s.id} onClick={() => { setSelectedUser(s); setView('specific_chat'); }} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 active:bg-white/20">
+                                <div className="w-12 h-12 bg-gray-700 rounded-full flex items-center justify-center font-bold flex-shrink-0">{getAvatar(s.name)}</div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between"><h4 className="font-bold truncate">{s.name || 'Visitor'}</h4><span className="text-xs text-gray-500 flex-shrink-0 ml-2">{new Date(s.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>
+                                    <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
             </div>
         )}
 
         {/* --- VIEW: SPECIFIC CHAT --- */}
         {view === 'specific_chat' && selectedUser && (
-            <div className="flex flex-col h-screen fixed inset-0 z-50 bg-[#0a0e14]">
+            <div className="flex flex-col h-full fixed inset-0 z-50 bg-[#0a0e14]">
                 {/* Header */}
-                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d]">
+                <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1f262d] flex-shrink-0">
                     <div className="flex items-center gap-3">
                         <button onClick={() => setView('chats')}><ChevronLeft className="w-6 h-6" /></button>
                         <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">{getAvatar(selectedUser.name)}</div>
@@ -190,7 +193,7 @@ export default function AdminApp() {
                 </div>
 
                 {/* Messages */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
                     {(selectedUser.chatHistory || []).map((m, i) => (
                         <div key={i} className={`flex ${m.sender==='system'?'justify-end':'justify-start'}`}>
                             <div className={`max-w-[75%] p-3 rounded-2xl text-sm ${m.sender==='system'?'bg-blue-600 text-white':'bg-gray-700 text-white'}`}>{m.text}</div>
@@ -199,7 +202,7 @@ export default function AdminApp() {
                 </div>
 
                 {/* Input */}
-                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3">
+                <div className="p-3 border-t border-white/10 bg-[#1f262d] space-y-3 flex-shrink-0">
                     <div className="flex gap-2">
                         <input className="flex-1 bg-black/20 rounded-full px-4 py-3 text-sm outline-none text-white border border-white/10" placeholder="Message..." value={adminMsg} onChange={e => setAdminMsg(e.target.value)} />
                         <button onClick={sendAdminMessage} className="p-3 bg-blue-600 rounded-full text-white"><Send className="w-5 h-5" /></button>
@@ -214,16 +217,16 @@ export default function AdminApp() {
 
         {/* --- VIEW: EVENTS MANAGER --- */}
         {view === 'events' && (
-            <div className="flex flex-col h-screen">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+            <div className="flex flex-col h-full">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
                     <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Manage Events</h2>
                 </div>
-                <div className="p-6 space-y-4 overflow-y-auto">
-                    <input placeholder="Artist" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
+                <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                    <input placeholder="Artist Name" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.artist} onChange={e=>setNewEvent({...newEvent, artist: e.target.value})} />
                     <input placeholder="Venue" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.venue} onChange={e=>setNewEvent({...newEvent, venue: e.target.value})} />
-                    <input placeholder="Date" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
-                    <input placeholder="Image URL" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
+                    <input placeholder="Date (e.g. Sat • Aug 17)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.date} onChange={e=>setNewEvent({...newEvent, date: e.target.value})} />
+                    <input placeholder="Image URL (Right click image -> Copy Link)" className="w-full bg-white/5 p-4 rounded-xl outline-none" value={newEvent.image} onChange={e=>setNewEvent({...newEvent, image: e.target.value})} />
                     <div className="flex gap-2">
                         <input placeholder="Badge" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.badge} onChange={e=>setNewEvent({...newEvent, badge: e.target.value})} />
                         <input placeholder="Timer" className="flex-1 bg-white/5 p-4 rounded-xl outline-none" value={newEvent.timer} onChange={e=>setNewEvent({...newEvent, timer: e.target.value})} />
@@ -244,12 +247,12 @@ export default function AdminApp() {
 
         {/* --- VIEW: PRICING --- */}
         {view === 'prices' && (
-            <div className="flex flex-col h-screen">
-                <div className="p-4 border-b border-white/10 flex items-center gap-4">
+            <div className="flex flex-col h-full">
+                <div className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0">
                     <button onClick={() => setView('dashboard')}><ChevronLeft className="w-6 h-6" /></button>
                     <h2 className="font-bold text-xl">Pricing Control</h2>
                 </div>
-                <div className="p-6 space-y-8">
+                <div className="p-6 space-y-8 flex-1 overflow-y-auto">
                     <div className="space-y-2">
                         <label className="text-xs font-bold uppercase text-blue-400">Regular Seat Price</label>
                         <input type="number" className="w-full bg-white/5 p-4 rounded-xl text-2xl font-mono" value={globalSettings.regularPrice} onChange={e => setGlobalSettings({...globalSettings, regularPrice: e.target.value})} />
