@@ -61,9 +61,7 @@ export default function UserApp() {
   );
 
   useEffect(() => {
-    if (selectedEvent) {
-      sessionStorage.setItem('tm_active_event', JSON.stringify(selectedEvent));
-    }
+    if (selectedEvent) sessionStorage.setItem('tm_active_event', JSON.stringify(selectedEvent));
   }, [selectedEvent]);
 
   useEffect(() => {
@@ -96,15 +94,9 @@ export default function UserApp() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
         if (!u) { 
-            setUser(null); 
-            setCurrentPage('auth'); 
-            setSessionReady(true);
-            setIsLoading(false); 
+            setUser(null); setCurrentPage('auth'); setSessionReady(true); setIsLoading(false); 
         } else { 
-            setUser(u); 
-            await findOrCreateSession(u); 
-            setSessionReady(true);
-            setIsLoading(false); 
+            setUser(u); await findOrCreateSession(u); setSessionReady(true); setIsLoading(false); 
         }
     });
     return () => unsub();
@@ -127,7 +119,7 @@ export default function UserApp() {
                 status: 'browsing', 
                 accessGranted: 'pending', 
                 ticketStatus: 'none',
-                chatHistory: [{ sender: 'system', text: 'Identity verified.', timestamp: new Date().toISOString() }],
+                chatHistory: [{ sender: 'system', text: 'Verified session.', timestamp: new Date().toISOString() }],
                 notifications: []
               });
               sid = docRef.id;
@@ -165,8 +157,7 @@ export default function UserApp() {
   };
 
   const handleAuthAction = async () => {
-      setAuthError('');
-      setAuthLoading(true);
+      setAuthError(''); setAuthLoading(true);
       try {
           if (authMode === 'signup') {
               const cred = await createUserWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
@@ -174,38 +165,12 @@ export default function UserApp() {
           } else {
               await signInWithEmailAndPassword(auth, tempUser.email, tempUser.pass);
           }
-      } catch (e) {
-          setAuthError(e.message.includes('auth/invalid-credential') ? "Invalid Email or Password" : e.message);
-      }
+      } catch (e) { setAuthError(e.message.includes('auth/invalid-credential') ? "Invalid Email or Password" : e.message); }
       setAuthLoading(false);
   };
 
-  // --- PROGRESS BAR COMPONENT ---
-  const renderProgress = (step) => (
-    <div className="flex items-center gap-2 mb-8 bg-white/5 p-3 rounded-full border border-white/10 backdrop-blur-md">
-        {[
-            { id: 'lobby', label: 'Lobby' },
-            { id: 'waiting', label: 'Waiting' },
-            { id: 'queue', label: 'Queue' },
-            { id: 'seats', label: 'Seats' }
-        ].map((s, idx) => (
-            <React.Fragment key={s.id}>
-                <div className="flex items-center gap-1.5 px-3">
-                    {step === s.id && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,1)]" />}
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${step === s.id ? 'text-white' : 'text-gray-500'}`}>{s.label}</span>
-                </div>
-                {idx < 3 && <div className="h-[1px] w-4 bg-white/10" />}
-            </React.Fragment>
-        ))}
-    </div>
-  );
-
   if (isLoading || !sessionReady) {
-    return (
-      <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="min-h-screen bg-[#0a0e14] flex items-center justify-center"><div className="w-12 h-12 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin" /></div>;
   }
 
   if (!region) {
@@ -218,16 +183,14 @@ export default function UserApp() {
                       <button onClick={() => setShowRegionList(true)} className="bg-[#026cdf] text-white px-12 py-5 rounded-full font-black uppercase tracking-widest text-lg shadow-2xl">Enter Portal</button>
                   </div>
               ) : (
-                  <div className="w-full max-w-sm animate-slideUp">
+                  <div className="w-full max-sm animate-slideUp flex flex-col gap-3">
                       <h2 className="text-2xl font-black uppercase italic mb-8 text-white">Select Region</h2>
-                      <div className="flex flex-col gap-3">
-                          {[{ id: 'USA', label: 'United States', flag: '🇺🇸' }, { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' }, { id: 'FRANCE', label: 'France', flag: '🇫🇷' }].map((r) => (
-                              <button key={r.id} onClick={() => handleRegionSelect(r.id)} className="bg-[#1f262d] border border-white/10 p-5 rounded-2xl flex items-center gap-4 hover:border-[#026cdf] transition-all">
-                                  <span className="text-2xl">{r.flag}</span>
-                                  <span className="font-black uppercase italic text-sm text-white">{r.label}</span>
-                              </button>
-                          ))}
-                      </div>
+                      {[{ id: 'USA', label: 'United States', flag: '🇺🇸' }, { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' }, { id: 'FRANCE', label: 'France', flag: '🇫🇷' }].map((r) => (
+                          <button key={r.id} onClick={() => handleRegionSelect(r.id)} className="bg-[#1f262d] border border-white/10 p-5 rounded-2xl flex items-center gap-4 hover:border-[#026cdf] transition-all">
+                              <span className="text-2xl">{r.flag}</span>
+                              <span className="font-black uppercase italic text-sm text-white">{r.label}</span>
+                          </button>
+                      ))}
                   </div>
               )}
           </div>
@@ -270,7 +233,6 @@ export default function UserApp() {
                      <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Email" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
                      <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Password" value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
                  </div>
-                 {authError && <p className="text-[10px] text-red-500 font-bold text-center uppercase tracking-widest">{authError}</p>}
                  <button onClick={handleAuthAction} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic shadow-lg active:scale-95 transition-all">
                      {authLoading ? "..." : (authMode === 'signup' ? "Join" : "Login")}
                  </button>
@@ -279,25 +241,36 @@ export default function UserApp() {
            </div>
         )}
 
-        {/* RESTORED: WAITING ROOM UI */}
         {currentPage === 'waiting_room' && (
-           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
-               <div className="relative z-10">
-                   {renderProgress('waiting')}
+           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6 overflow-hidden">
+               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl scale-110" alt="" /></div>
+               <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
+                   {/* INLINE PROGRESS BAR */}
+                   <div className="flex items-center gap-2 mb-8 bg-black/30 p-3 rounded-full border border-white/10 backdrop-blur-xl">
+                        <div className="flex items-center gap-1.5 px-3"><span className="text-[10px] font-black uppercase text-white/40">Lobby</span></div>
+                        <div className="h-[1px] w-4 bg-white/10" />
+                        <div className="flex items-center gap-1.5 px-3"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><span className="text-[10px] font-black uppercase text-white">Waiting</span></div>
+                        <div className="h-[1px] w-4 bg-white/10" />
+                        <div className="flex items-center gap-1.5 px-3"><span className="text-[10px] font-black uppercase text-white/40">Queue</span></div>
+                   </div>
                    <div className="w-16 h-16 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin mb-6 mx-auto" />
                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Verifying Identity...</h2>
-                   <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mt-2">Checking Regional Access Protocols</p>
                </div>
            </div>
         )}
 
-        {/* RESTORED: QUEUE UI */}
         {currentPage === 'queue' && (
-           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
+           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12 overflow-hidden">
+               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl scale-110" alt="" /></div>
                <div className="relative z-10 space-y-12 w-full max-w-md flex flex-col items-center">
-                   {renderProgress('queue')}
+                    {/* INLINE PROGRESS BAR */}
+                    <div className="flex items-center gap-2 mb-8 bg-black/30 p-3 rounded-full border border-white/10 backdrop-blur-xl">
+                        <div className="flex items-center gap-1.5 px-3"><span className="text-[10px] font-black uppercase text-white/40">Lobby</span></div>
+                        <div className="h-[1px] w-4 bg-white/10" />
+                        <div className="flex items-center gap-1.5 px-3"><span className="text-[10px] font-black uppercase text-white/40">Waiting</span></div>
+                        <div className="h-[1px] w-4 bg-white/10" />
+                        <div className="flex items-center gap-1.5 px-3"><div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /><span className="text-[10px] font-black uppercase text-white">Queue</span></div>
+                   </div>
                    <div className="space-y-4">
                        <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                        <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
@@ -312,37 +285,22 @@ export default function UserApp() {
         {currentPage === 'home' && (
             <div className="space-y-8 animate-fadeIn">
                 <div className="relative h-64 rounded-[32px] overflow-hidden">
-                    <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60" alt="Concert backdrop" />
+                    <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60" alt="" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] to-transparent" />
                     <div className="absolute bottom-8 left-8"><h1 className="text-4xl font-black italic uppercase text-white tracking-tighter">Verified Events</h1></div>
                 </div>
-
                 <div className="relative max-w-md mx-auto">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                    <input 
-                        type="text" 
-                        placeholder="Search artist or venue..." 
-                        className="w-full bg-[#1f262d] border border-white/5 rounded-2xl py-4 pl-12 pr-4 font-bold text-sm outline-none focus:border-[#026cdf] transition-all"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <input type="text" placeholder="Search artist or venue..." className="w-full bg-[#1f262d] border border-white/5 rounded-2xl py-4 pl-12 pr-4 font-bold text-sm outline-none focus:border-[#026cdf]" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredEvents.map(ev => (
                         <div key={ev.id} onClick={() => { setSelectedEvent(ev); setCurrentPage('waiting_room'); }} className="bg-[#1f262d] border border-white/5 rounded-[30px] p-4 hover:border-[#026cdf] cursor-pointer transition-all active:scale-95">
-                            <img src={ev.image} className="w-full h-40 object-cover rounded-[24px] mb-4" alt={ev.artist} />
+                            <img src={ev.image} className="w-full h-40 object-cover rounded-[24px] mb-4" alt="" />
                             <h3 className="text-xl font-black italic uppercase text-white tracking-tighter">{ev.artist}</h3>
                         </div>
                     ))}
-                    {eventsList.length === 0 ? (
-                        <div className="col-span-full text-center py-20">
-                            <div className="w-8 h-8 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Syncing Region Events...</p>
-                        </div>
-                    ) : filteredEvents.length === 0 && (
-                        <p className="col-span-full text-center py-12 text-gray-500 font-bold uppercase tracking-widest">No matching events found.</p>
-                    )}
+                    {eventsList.length === 0 && <div className="col-span-full text-center py-20"><div className="w-8 h-8 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin mx-auto" /></div>}
                 </div>
             </div>
         )}
@@ -373,9 +331,8 @@ export default function UserApp() {
                               <h3 className="text-3xl font-black italic uppercase leading-none">Verified</h3>
                               <div className="bg-gray-100 p-8 rounded-[32px] relative overflow-hidden flex flex-col items-center">
                                   <div className="absolute top-0 left-0 w-full h-1 bg-[#026cdf] animate-scan" />
-                                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VERIFIED" className="w-48 h-48" alt="Verified QR" />
+                                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VERIFIED" className="w-48 h-48" alt="" />
                               </div>
-                              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Active Pass</p>
                           </div>
                       ) : (
                           <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-40">
