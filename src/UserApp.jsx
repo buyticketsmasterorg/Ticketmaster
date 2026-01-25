@@ -55,6 +55,9 @@ export default function UserApp() {
   const currencyMap = { 'UK': '£', 'USA': '$', 'FRANCE': '€' };
   const currency = currencyMap[region] || '$';
 
+  // FIX #1: THE IMAGE SAFETY FLOOR
+  const bgImage = selectedEvent?.image || eventsList[0]?.image || 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000';
+
   const filteredEvents = eventsList.filter(ev => 
     ev.artist?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     ev.venue?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -93,12 +96,19 @@ export default function UserApp() {
     }
   }, [currentPage]);
 
+  // FIX #2: THE AUTH LOCK (Wait for tm_sid before flashing login)
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
         if (!u) { 
-            setUser(null); setCurrentPage('auth'); setSessionReady(true); setIsLoading(false); 
+            setUser(null); 
+            if (!sessionStorage.getItem('tm_sid')) setCurrentPage('auth');
+            setSessionReady(true); 
+            setIsLoading(false); 
         } else { 
-            setUser(u); await findOrCreateSession(u); setSessionReady(true); setIsLoading(false); 
+            setUser(u); 
+            await findOrCreateSession(u); 
+            setSessionReady(true); 
+            setIsLoading(false); 
         }
     });
     return () => unsub();
@@ -213,13 +223,13 @@ export default function UserApp() {
       
       {/* BREADCRUMB PROGRESS BAR */}
       {['waiting_room', 'queue', 'seatmap'].includes(currentPage) && (
-        <div className="fixed top-0 left-0 w-full z-[200] bg-black/40 backdrop-blur-xl border-b border-white/10">
+        <div className="fixed top-0 left-0 w-full z-[400] bg-black/40 backdrop-blur-xl border-b border-white/10">
           <div className="max-w-3xl mx-auto flex items-center justify-between px-6 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white">
             {['Lobby', 'Waiting', 'Queue', 'Pick Seats'].map((step, i) => {
               const active = (currentPage === 'waiting_room' && step === 'Waiting') || (currentPage === 'queue' && step === 'Queue') || (currentPage === 'seatmap' && step === 'Pick Seats');
               return (
                 <div key={step} className="flex items-center gap-2">
-                  <span className={`${active ? 'text-green-400' : 'text-gray-500'}`}>{step}</span>
+                  <span className={`${active ? 'text-green-400' : 'text-gray-400'}`}>{step}</span>
                   {active && (
                     <span className="relative flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -276,9 +286,12 @@ export default function UserApp() {
            </div>
         )}
 
+        {/* FIX #3: Z-INDEX 300 RAISED FOR FULL-SCREEN STAGES */}
         {currentPage === 'waiting_room' && (
-           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-lg scale-105" alt="" /></div>
+           <div className="fixed inset-0 z-[300] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6">
+               <div className="absolute inset-0 z-0">
+                  <img src={bgImage} className="w-full h-full object-cover opacity-80 blur-lg scale-105" alt="" />
+               </div>
                <div className="relative z-10">
                    <div className="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin mb-6 mx-auto" />
                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white drop-shadow-2xl">Verifying Identity...</h2>
@@ -287,8 +300,10 @@ export default function UserApp() {
         )}
 
         {currentPage === 'queue' && (
-           <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-lg scale-105" alt="" /></div>
+           <div className="fixed inset-0 z-[300] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12">
+               <div className="absolute inset-0 z-0">
+                  <img src={bgImage} className="w-full h-full object-cover opacity-80 blur-lg scale-105" alt="" />
+               </div>
                <div className="relative z-10 space-y-12 w-full max-w-md">
                    <div className="space-y-4">
                        <h2 className="text-7xl font-black italic text-white tracking-tighter drop-shadow-2xl">{queuePosition}</h2>
