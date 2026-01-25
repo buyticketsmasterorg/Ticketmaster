@@ -266,8 +266,8 @@ export default function UserApp() {
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-6">
                <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
                <div className="relative z-10 w-full max-w-md space-y-12">
-                   {/* Event Details at Top */}
-                   <div className="space-y-2">
+                   {/* Event Details at Top-Left */}
+                   <div className="text-left pl-4 space-y-2">
                        <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
                        <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">
                            {selectedEvent?.venue} • {selectedEvent?.date}
@@ -287,8 +287,8 @@ export default function UserApp() {
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col items-center justify-center text-center p-8 space-y-12">
                <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
                <div className="relative z-10 w-full max-w-md space-y-12">
-                   {/* Event Details at Top */}
-                   <div className="space-y-2">
+                   {/* Event Details at Top-Left */}
+                   <div className="text-left pl-4 space-y-2">
                        <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
                        <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">
                            {selectedEvent?.venue} • {selectedEvent?.date}
@@ -299,7 +299,9 @@ export default function UserApp() {
                        <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                        <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
                        <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">High demand—your position updates live. Approx. {Math.ceil(queuePosition / 80)} min left.</p>
-                       <div className="w-full bg-white/10 h-3 rounded-full overflow-hidden border border-white/10">
+                       {/* Waiting Line (Progress Bar) - Made more prominent */}
+                       <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Your Position in Line</p>
+                       <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden border border-white/10 shadow-md">
                            <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${queueProgress}%` }} />
                        </div>
                    </div>
