@@ -290,15 +290,33 @@ export default function UserApp() {
                        {selectedEvent?.venue} • {selectedEvent?.date}
                    </p>
                </div>
-               <div className="relative z-10 flex flex-col items-center justify-center flex-1 space-y-4 text-center">
+               <div className="relative z-10 flex flex-col items-center justify-center flex-1 space-y-8 text-center">
                    <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                    <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
-                   {/* Waiting Line (Progress Bar) - With Lobby/Queue Context */}
-                   <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Waiting Room Queue</p>
-                   <div className="w-full max-w-md bg-white/10 h-4 rounded-full overflow-hidden border border-white/10 shadow-md">
-                       <div className="h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${queueProgress}%` }} />
+                   {/* Multi-Stage Progress Bar */}
+                   <div className="w-full max-w-md space-y-4">
+                       {/* Stage Labels */}
+                       <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
+                           <span>Lobby</span>
+                           <span>Waiting Room</span>
+                           <span>Queue</span>
+                           <span>Pick Seat</span>
+                       </div>
+                       {/* Progress Bar with Dots and Moving Pip */}
+                       <div className="relative w-full h-4 bg-white/10 rounded-full overflow-hidden border border-white/10 shadow-md">
+                           {/* Blue Fill */}
+                           <div className="absolute top-0 left-0 h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${queueProgress}%` }} />
+                           {/* Stage Dots */}
+                           <div className="absolute top-1/2 left-0 w-full flex justify-between -translate-y-1/2 px-1">
+                               <div className="w-2 h-2 bg-white rounded-full" />
+                               <div className="w-2 h-2 bg-white rounded-full" />
+                               <div className="w-2 h-2 bg-white rounded-full" />
+                               <div className="w-2 h-2 bg-white rounded-full" />
+                           </div>
+                           {/* Moving Pip (Flashing Dot) */}
+                           <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#026cdf] rounded-full shadow-[0_0_10px_#026cdf] animate-pulse transition-all duration-1000" style={{ left: `${queueProgress}%` }} />
+                       </div>
                    </div>
-                   <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">Lobby opens soon • Pick your seats when ready</p>
                </div>
            </div>
         )}
