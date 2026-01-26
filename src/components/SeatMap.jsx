@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { ChevronLeft, Info, ShoppingCart, AlertTriangle, Monitor } from 'lucide-react';
 
 export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, onCheckout }) {
-  const [view, setView] = useState('stadium'); 
+  const [view, setView] = useState('overview'); // overview (main img), underlay (zoom img), section (zoom + dots)
   const [selectedSection, setSelectedSection] = useState(null);
   
   const [panicState, setPanicState] = useState('idle');
   const [failCount, setFailCount] = useState(0);
   const [flashMsg, setFlashMsg] = useState('');
 
-  // Define Blocks with separate prices
+  // Define Blocks with separate prices (kept for pricing logic, even with static images)
   const sections = [
     { id: 'floor-a', name: 'Floor A (VIP)', color: 'bg-[#026cdf]', price: vipPrice, isVip: true, type: 'floor' },
     { id: 'floor-b', name: 'Floor B', color: 'bg-[#026cdf]', price: regularPrice * 2, type: 'floor' },
@@ -23,6 +23,10 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
     { id: '201', name: 'Sec 201', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
     { id: '202', name: 'Sec 202', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
   ];
+
+  // Cloudinary URLs
+  const overviewImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769268299/IMG_1794_sq9tsz.jpg';
+  const zoomImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769268302/IMG_1795_gkc0s7.jpg';
 
   const handleSeatClick = (seatLabel, price) => {
     // 1. Unpick Logic (Remove if already selected)
@@ -68,33 +72,80 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
         </div>
       </div>
 
-      {view === 'stadium' && (
+      {view === 'overview' && (
         <div className="max-w-4xl mx-auto space-y-4 py-10">
-            <div className="w-full h-24 bg-black border-b-4 border-[#ea0042] rounded-b-3xl shadow-[0_10px_50px_rgba(234,0,66,0.1)] flex items-center justify-center mb-12"><span className="text-gray-600 font-black uppercase tracking-[0.5em] text-xs">Main Stage</span></div>
-            <div className="flex justify-center gap-4 lg:gap-8">
-                <div className="flex flex-col gap-2 w-20 lg:w-32 pt-10">{sections.filter(s=>s.type==='side-left').map(s => (<button key={s.id} onClick={()=>{setView('section'); setSelectedSection(s);}} className={`${s.color} h-24 rounded-lg border-2 border-white/5 hover:border-white hover:scale-105 transition-all shadow-lg flex items-center justify-center group`}><span className="text-[10px] font-bold text-gray-400 -rotate-90 group-hover:text-white">{s.name}</span></button>))}</div>
-                <div className="flex-1 max-w-sm flex flex-col gap-2">
-                    {sections.filter(s=>s.type==='floor').map(s => (<button key={s.id} onClick={()=>{setView('section'); setSelectedSection(s);}} className={`${s.color} h-32 rounded-lg border-2 border-white/5 hover:border-white hover:scale-105 transition-all shadow-lg flex items-center justify-center group`}><span className="text-xs font-black text-blue-200 uppercase tracking-widest group-hover:text-white">{s.name}</span></button>))}
-                    <div className="flex gap-2 mt-4">{sections.filter(s=>s.type==='back').map(s => (<button key={s.id} onClick={()=>{setView('section'); setSelectedSection(s);}} className={`${s.color} h-16 flex-1 rounded-lg border-2 border-white/5 hover:border-white hover:scale-105 transition-all shadow-lg flex items-center justify-center group`}><span className="text-[10px] font-bold text-gray-400 group-hover:text-white">{s.name}</span></button>))}</div>
-                </div>
-                <div className="flex flex-col gap-2 w-20 lg:w-32 pt-10">{sections.filter(s=>s.type==='side-right').map(s => (<button key={s.id} onClick={()=>{setView('section'); setSelectedSection(s);}} className={`${s.color} h-24 rounded-lg border-2 border-white/5 hover:border-white hover:scale-105 transition-all shadow-lg flex items-center justify-center group`}><span className="text-[10px] font-bold text-gray-400 rotate-90 group-hover:text-white">{s.name}</span></button>))}</div>
-            </div>
-            <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-8">Tap a section to view seats</p>
+            <img 
+                src={overviewImage} 
+                alt="Stadium Overview" 
+                className="w-full h-auto object-contain cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
+                onClick={() => setView('underlay')}
+            />
+            <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-4">Tap anywhere to zoom in</p>
         </div>
       )}
 
-      {view === 'section' && selectedSection && (
+      {view === 'underlay' && (
         <div className="animate-slideUp relative">
-           <button onClick={() => setView('stadium')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Return to Map</button>
-           {flashMsg && <div className="absolute top-0 left-0 w-full z-50 bg-[#ea0042] text-white p-4 rounded-xl font-bold uppercase tracking-widest text-center animate-bounce shadow-2xl"><AlertTriangle className="w-5 h-5 inline-block mr-2" />{flashMsg}</div>}
-           <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl relative overflow-hidden min-h-[500px]">
-              <div className="flex justify-between items-end mb-8 border-b border-gray-100 pb-4 relative z-10"><div><h3 className={`text-3xl font-black italic uppercase tracking-tighter ${selectedSection.isVip ? 'text-pink-600' : 'text-gray-900'}`}>{selectedSection.name}</h3><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Standard Admission</p></div><div className="text-right"><p className="text-3xl font-black text-[#026cdf]">${selectedSection.price}</p><p className="text-[10px] font-bold text-gray-400 uppercase">Per Ticket</p></div></div>
-              <div className="overflow-x-auto pb-4 relative z-10"><div className="min-w-[300px] grid grid-cols-8 gap-2 sm:gap-3 justify-center">{[...Array(80)].map((_, i) => { const row = String.fromCharCode(65 + Math.floor(i / 8)); const num = (i % 8) + 1; const label = `${selectedSection.name} • Row ${row}-${num}`; const isSelected = cart.find(c => c.label === label); let isVisualGrey = false; if (panicState === 'all-grey') isVisualGrey = true; else if (panicState === 'partial-grey') { if (i % 3 !== 0) isVisualGrey = true; } return (<button key={i} disabled={isVisualGrey} onClick={() => handleSeatClick(label, selectedSection.price)} className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-[9px] font-black transition-all border-2 ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected ? 'bg-green-500 border-green-500 text-white hover:bg-red-500' : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}`}>{!isVisualGrey && (isSelected ? <span className="group-hover:hidden">✓</span> : num)}</button>) })}</div></div>
-           </div>
+           <button onClick={() => setView('overview')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Back to Overview</button>
+           <img 
+               src={zoomImage} 
+               alt="Stadium Zoom" 
+               className="w-full h-auto object-contain cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
+               onClick={() => setView('section')}
+           />
+           <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-4">Tap anywhere to select seats</p>
         </div>
       )}
+
+      {view === 'section' && (
+        <div className="animate-slideUp relative">
+           {flashMsg && <div className="absolute top-0 left-0 w-full z-50 bg-[#ea0042] text-white p-4 rounded-xl font-bold uppercase tracking-widest text-center animate-bounce shadow-2xl"><AlertTriangle className="w-5 h-5 inline-block mr-2" />{flashMsg}</div>}
+           <button onClick={() => setView('underlay')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Back to Zoom View</button>
+           <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl relative overflow-hidden min-h-[500px]">
+              <div className="flex justify-between items-end mb-8 border-b border-gray-100 pb-4 relative z-10"><div><h3 className={`text-3xl font-black italic uppercase tracking-tighter ${selectedSection?.isVip ? 'text-pink-600' : 'text-gray-900'}`}>{selectedSection?.name || 'Stadium Seats'}</h3><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Standard Admission</p></div><div className="text-right"><p className="text-3xl font-black text-[#026cdf]">${selectedSection?.price || regularPrice}</p><p className="text-[10px] font-bold text-gray-400 uppercase">Per Ticket</p></div></div>
+              <div className="relative">
+                  <img 
+                      src={zoomImage} 
+                      alt="Stadium Zoom with Seats" 
+                      className="w-full h-auto object-contain rounded-lg"
+                  />
+                  <div className="absolute inset-0 overflow-x-auto pb-4">
+                      <div className="min-w-[300px] grid grid-cols-10 gap-1 sm:gap-2 justify-center"> {/* Increased to 10 cols, gap-1 for more/smaller */}
+                          {[...Array(120)].map((_, i) => { // Increased to 120 dots (10x12)
+                              const row = String.fromCharCode(65 + Math.floor(i / 10));
+                              const num = (i % 10) + 1;
+                              const label = `Row ${row}-${num}`;
+                              const isSelected = cart.find(c => c.label === label);
+                              let isVisualGrey = false;
+                              if (panicState === 'all-grey') isVisualGrey = true;
+                              else if (panicState === 'partial-grey') { if (i % 3 !== 0) isVisualGrey = true; }
+                              return (
+                                  <button 
+                                      key={i} 
+                                      disabled={isVisualGrey} 
+                                      onClick={() => handleSeatClick(label, regularPrice)} // Using regularPrice as default; adjust if needed
+                                      className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] font-black transition-all border ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected ? 'bg-green-500 border-green-500 text-white hover:bg-red-500' : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}`}
+                                  >
+                                      {!isVisualGrey && (isSelected ? <span className="group-hover:hidden">✓</span> : num)}
+                                  </button>
+                              );
+                          })}
+                      </div>
+                  </div>
+              </div>
+           </div>
+           {/* Proceed to Payment Button */}
+           {cart.length > 0 && (
+               <button 
+                   onClick={onCheckout} 
+                   className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#026cdf] text-white py-4 px-12 rounded-full font-black uppercase italic tracking-widest shadow-xl hover:bg-[#014bb4] transition-all"
+               >
+                   Proceed to Payment ({cart.length} seats)
+               </button>
+           )}
+        </div>
+      )}
+
     </div>
   );
 }
-
-
