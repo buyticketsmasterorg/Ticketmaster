@@ -7,6 +7,146 @@ import { getFirestore, collection, addDoc, updateDoc, doc, getDocs, getDoc, onSn
 import SeatMap from './components/SeatMap.jsx';
 import Checkout from './components/Checkout.jsx';
 
+import i18next from 'i18next';
+import { initReactI18next, useTranslation } from 'react-i18next';
+
+// i18n setup
+i18next
+  .use(initReactI18next)
+  .init({
+    resources: {
+      en: {
+        translation: {
+          "Global Access": "Global Access",
+          "Enter Portal": "Enter Portal",
+          "Select Region": "Select Region",
+          "Create Account": "Create Account",
+          "Sign In": "Sign In",
+          "Full Name": "Full Name",
+          "Birthday (DD/MM/YYYY)": "Birthday (DD/MM/YYYY)",
+          "Mobile": "Mobile",
+          "Email": "Email",
+          "Password": "Password",
+          "Join": "Join",
+          "Login": "Login",
+          "Existing Member?": "Existing Member?",
+          "Create account?": "Create account?",
+          "Verifying Identity...": "Verifying Identity...",
+          "Preparing your spot for this high-demand event": "Preparing your spot for this high-demand event",
+          "Fans Ahead of You": "Fans Ahead of You",
+          "Do not refresh the page": "Do not refresh the page",
+          "Verified Events": "Verified Events",
+          "Search artist or venue...": "Search artist or venue...",
+          "Syncing Region Events...": "Syncing Region Events...",
+          "No matching events found.": "No matching events found.",
+          "Select Seats": "Select Seats",
+          "Available": "Available",
+          "Sold": "Sold",
+          "Your Seat": "Your Seat",
+          "Standard Admission": "Standard Admission",
+          "Per Ticket": "Per Ticket",
+          "Sorry! Another fan beat you to this seat.": "Sorry! Another fan beat you to this seat.",
+          "Payment Received": "Payment Received",
+          "View My Progress": "View My Progress",
+          "Digital Pass": "Digital Pass",
+          "Verified": "Verified",
+          "Active Pass": "Active Pass",
+          "No active tickets found.": "No active tickets found.",
+          "Secure Support": "Secure Support",
+          "Message...": "Message...",
+          "If loading takes too long, please refresh the page": "If loading takes too long, please refresh the page"
+        }
+      },
+      fr: {
+        translation: {
+          "Global Access": "Accès Global",
+          "Enter Portal": "Entrer dans le Portail",
+          "Select Region": "Sélectionner la Région",
+          "Create Account": "Créer un Compte",
+          "Sign In": "Se Connecter",
+          "Full Name": "Nom Complet",
+          "Birthday (DD/MM/YYYY)": "Anniversaire (JJ/MM/AAAA)",
+          "Mobile": "Mobile",
+          "Email": "Email",
+          "Password": "Mot de Passe",
+          "Join": "Rejoindre",
+          "Login": "Connexion",
+          "Existing Member?": "Membre Existant ?",
+          "Create account?": "Créer un compte ?",
+          "Verifying Identity...": "Vérification de l'Identité...",
+          "Preparing your spot for this high-demand event": "Préparation de votre place pour cet événement très demandé",
+          "Fans Ahead of You": "Fans Devant Vous",
+          "Do not refresh the page": "Ne rafraîchissez pas la page",
+          "Verified Events": "Événements Vérifiés",
+          "Search artist or venue...": "Rechercher artiste ou lieu...",
+          "Syncing Region Events...": "Synchronisation des Événements de la Région...",
+          "No matching events found.": "Aucun événement correspondant trouvé.",
+          "Select Seats": "Sélectionner les Sièges",
+          "Available": "Disponible",
+          "Sold": "Vendu",
+          "Your Seat": "Votre Siège",
+          "Standard Admission": "Admission Standard",
+          "Per Ticket": "Par Billet",
+          "Sorry! Another fan beat you to this seat.": "Désolé ! Un autre fan vous a devancé pour ce siège.",
+          "Payment Received": "Paiement Reçu",
+          "View My Progress": "Voir Mon Progrès",
+          "Digital Pass": "Passe Numérique",
+          "Verified": "Vérifié",
+          "Active Pass": "Passe Actif",
+          "No active tickets found.": "Aucun billet actif trouvé.",
+          "Secure Support": "Support Sécurisé",
+          "Message...": "Message...",
+          "If loading takes too long, please refresh the page": "Si le chargement prend trop de temps, veuillez rafraîchir la page"
+        }
+      },
+      de: {
+        translation: {
+          "Global Access": "Globaler Zugriff",
+          "Enter Portal": "Portal Betreten",
+          "Select Region": "Region Auswählen",
+          "Create Account": "Konto Erstellen",
+          "Sign In": "Anmelden",
+          "Full Name": "Vollständiger Name",
+          "Birthday (DD/MM/YYYY)": "Geburtstag (TT/MM/JJJJ)",
+          "Mobile": "Mobil",
+          "Email": "E-Mail",
+          "Password": "Passwort",
+          "Join": "Beitreten",
+          "Login": "Anmelden",
+          "Existing Member?": "Bestehendes Mitglied?",
+          "Create account?": "Konto erstellen?",
+          "Verifying Identity...": "Identität Überprüfen...",
+          "Preparing your spot for this high-demand event": "Vorbereitung Ihres Platzes für dieses hochgeforderte Ereignis",
+          "Fans Ahead of You": "Fans Vor Ihnen",
+          "Do not refresh the page": "Seite nicht aktualisieren",
+          "Verified Events": "Verifizierte Ereignisse",
+          "Search artist or venue...": "Künstler oder Veranstaltungsort suchen...",
+          "Syncing Region Events...": "Region Ereignisse Synchronisieren...",
+          "No matching events found.": "Keine passenden Ereignisse gefunden.",
+          "Select Seats": "Sitze Auswählen",
+          "Available": "Verfügbar",
+          "Sold": "Verkauft",
+          "Your Seat": "Ihr Sitz",
+          "Standard Admission": "Standard-Zugang",
+          "Per Ticket": "Pro Ticket",
+          "Sorry! Another fan beat you to this seat.": "Entschuldigung! Ein anderer Fan hat diesen Sitz vor Ihnen ergattert.",
+          "Payment Received": "Zahlung Erhalten",
+          "View My Progress": "Meinen Fortschritt Ansehen",
+          "Digital Pass": "Digitaler Pass",
+          "Verified": "Verifiziert",
+          "Active Pass": "Aktiver Pass",
+          "No active tickets found.": "Keine aktiven Tickets gefunden.",
+          "Secure Support": "Sicherer Support",
+          "Message...": "Nachricht...",
+          "If loading takes too long, please refresh the page": "Wenn das Laden zu lange dauert, bitte die Seite aktualisieren"
+        }
+      }
+    },
+    lng: 'en', // default
+    fallbackLng: 'en',
+    interpolation: { escapeValue: false }
+  });
+
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -22,6 +162,8 @@ const db = getFirestore(app);
 const appId = import.meta.env.VITE_APP_ID || 'default-app-id';
 
 export default function UserApp() {
+  const { t, i18n } = useTranslation();
+
   const [user, setUser] = useState(null);
   const [region, setRegion] = useState(localStorage.getItem('user_region') || null);
   const [showRegionList, setShowRegionList] = useState(false);
@@ -29,17 +171,19 @@ export default function UserApp() {
   const [sessionReady, setSessionReady] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState('auth'); 
-  const [searchTerm, setSearchTerm] = useState(''); // RE-ADDED
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedEvent, setSelectedEvent] = useState(() => {
     const saved = sessionStorage.getItem('tm_active_event');
     return saved ? JSON.parse(saved) : null;
   });
   const [cart, setCart] = useState([]); 
   const [showTicketOverlay, setShowTicketOverlay] = useState(false);
+  const [showNotificationsOverlay, setShowNotificationsOverlay] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [globalSettings, setGlobalSettings] = useState({ regularPrice: 150, vipPrice: 450 });
   const [eventsList, setEventsList] = useState([]); 
-  const [sessionData, setSessionData] = useState({ ticketStatus: 'none', chatHistory: [] });
+  const [sessionData, setSessionData] = useState({ ticketStatus: 'none', chatHistory: [], notifications: [] });
+  const [showRefreshPopup, setShowRefreshPopup] = useState(false);
 
   const [authMode, setAuthMode] = useState('login'); 
   const [tempUser, setTempUser] = useState({ email: '', name: '', phone: '', dob: '', pass: '' });
@@ -50,10 +194,13 @@ export default function UserApp() {
 
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [unreadNotifCount, setUnreadNotifCount] = useState(0);
+  const [unreadTicketCount, setUnreadTicketCount] = useState(0);
 
-  const currencyMap = { 'UK': '£', 'USA': '$', 'FRANCE': '€' };
+  const currencyMap = { 'UK': '£', 'USA': '$', 'FRANCE': '€', 'GERMANY': '€' };
   const currency = currencyMap[region] || '$';
+  const langMap = { 'UK': 'en', 'USA': 'en', 'FRANCE': 'fr', 'GERMANY': 'de' };
 
   // --- SEARCH FILTER LOGIC ---
   const filteredEvents = eventsList.filter(ev => 
@@ -69,12 +216,25 @@ export default function UserApp() {
 
   useEffect(() => {
     if (!region) return;
+    i18n.changeLanguage(langMap[region] || 'en');
+
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (snap) => {
         const all = snap.docs.map(d => ({id: d.id, ...d.data()}));
         setEventsList(all.filter(e => e.region === region || !e.region));
     });
-    return () => unsubEvents();
-  }, [region]);
+
+    // Timeout for refresh popup
+    const timeout = setTimeout(() => {
+      if (eventsList.length === 0 && currentPage === 'home') {
+        setShowRefreshPopup(true);
+      }
+    }, 10000); // 10 seconds
+
+    return () => {
+      unsubEvents();
+      clearTimeout(timeout);
+    };
+  }, [region, user, i18n]); // Added user dependency for post-login re-fetch
 
   useEffect(() => {
     if (currentPage === 'waiting_room') {
@@ -147,12 +307,22 @@ export default function UserApp() {
       if(snap.exists()) {
         const d = snap.data();
         setSessionData(d);
-        setChatMessages(d.chatHistory || []);
-        if (d.ticketStatus === 'issued' && sessionData?.ticketStatus !== 'issued') setUnreadNotifCount(prev => prev + 1);
+        const newChat = d.chatHistory || [];
+        const newNotifs = d.notifications || [];
+        if (newChat.length > chatMessages.length && newChat[newChat.length - 1].sender === 'system') {
+          setUnreadChatCount(prev => prev + 1);
+        }
+        setChatMessages(newChat);
+        if (newNotifs.length > sessionData.notifications.length) {
+          setUnreadNotifCount(prev => prev + (newNotifs.length - sessionData.notifications.length));
+        }
+        if (d.ticketStatus === 'issued' && sessionData?.ticketStatus !== 'issued') {
+          setUnreadTicketCount(prev => prev + 1);
+        }
       }
     });
     return () => unsub();
-  }, [currentSessionId]);
+  }, [currentSessionId, chatMessages, sessionData]);
 
   const handleRegionSelect = (reg) => {
       localStorage.setItem('user_region', reg);
@@ -197,14 +367,14 @@ export default function UserApp() {
               {!showRegionList ? (
                   <div className="space-y-8 animate-fadeIn">
                       <Globe className="w-32 h-32 text-[#026cdf] animate-pulse mx-auto" />
-                      <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">Global Access</h1>
-                      <button onClick={() => setShowRegionList(true)} className="bg-[#026cdf] text-white px-12 py-5 rounded-full font-black uppercase tracking-widest text-lg shadow-2xl">Enter Portal</button>
+                      <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">{t('Global Access')}</h1>
+                      <button onClick={() => setShowRegionList(true)} className="bg-[#026cdf] text-white px-12 py-5 rounded-full font-black uppercase tracking-widest text-lg shadow-2xl">{t('Enter Portal')}</button>
                   </div>
               ) : (
                   <div className="w-full max-w-sm animate-slideUp">
-                      <h2 className="text-2xl font-black uppercase italic mb-8 text-white">Select Region</h2>
+                      <h2 className="text-2xl font-black uppercase italic mb-8 text-white">{t('Select Region')}</h2>
                       <div className="flex flex-col gap-3">
-                          {[{ id: 'USA', label: 'United States', flag: '🇺🇸' }, { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' }, { id: 'FRANCE', label: 'France', flag: '🇫🇷' }].map((r) => (
+                          {[{ id: 'USA', label: 'United States', flag: '🇺🇸' }, { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' }, { id: 'FRANCE', label: 'France', flag: '🇫🇷' }, { id: 'GERMANY', label: 'Germany', flag: '🇩🇪' }].map((r) => (
                               <button key={r.id} onClick={() => handleRegionSelect(r.id)} className="bg-[#1f262d] border border-white/10 p-5 rounded-2xl flex items-center gap-4 hover:border-[#026cdf] transition-all">
                                   <span className="text-2xl">{r.flag}</span>
                                   <span className="font-black uppercase italic text-sm text-white">{r.label}</span>
@@ -227,9 +397,13 @@ export default function UserApp() {
                 <CheckCircle className="w-4 h-4 text-[#026cdf] fill-current" />
             </div>
             <div className="flex items-center gap-3">
-                <button onClick={() => { setShowTicketOverlay(true); setUnreadNotifCount(0); }} className="p-2.5 bg-white/5 rounded-full relative">
-                    <Ticket className={`w-5 h-5 ${sessionData?.ticketStatus === 'issued' ? 'text-[#026cdf]' : 'text-gray-400'}`} />
+                <button onClick={() => { setShowNotificationsOverlay(true); setUnreadNotifCount(0); }} className="p-2.5 bg-white/5 rounded-full relative">
+                    <Bell className="w-5 h-5 text-gray-400" />
                     {unreadNotifCount > 0 && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-[#1f262d]" />}
+                </button>
+                <button onClick={() => { setShowTicketOverlay(true); setUnreadTicketCount(0); }} className="p-2.5 bg-white/5 rounded-full relative">
+                    <Ticket className={`w-5 h-5 ${sessionData?.ticketStatus === 'issued' ? 'text-[#026cdf]' : 'text-gray-400'}`} />
+                    {unreadTicketCount > 0 && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-[#1f262d]" />}
                 </button>
                 <button onClick={handleLogout} className="p-2.5 bg-white/5 rounded-full text-gray-500 hover:text-red-500 transition-colors"><LogOut className="w-5 h-5" /></button>
             </div>
@@ -241,58 +415,64 @@ export default function UserApp() {
         {currentPage === 'auth' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex items-center justify-center p-4">
               <div className="bg-white text-black w-full max-w-md p-8 rounded-[40px] shadow-2xl space-y-6">
-                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{authMode==='signup' ? "Create Account" : "Sign In"}</h2></div>
+                 <div className="text-center"><h2 className="text-3xl font-black italic uppercase tracking-tighter">{t(authMode==='signup' ? "Create Account" : "Sign In")}</h2></div>
                  <div className="space-y-3">
                      {authMode === 'signup' && (
                          <>
-                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Full Name" value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} />
-                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Birthday (DD/MM/YYYY)" value={tempUser.dob} onChange={e => setTempUser({...tempUser, dob: e.target.value})} />
-                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Mobile" value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} />
+                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder={t('Full Name')} value={tempUser.name} onChange={e => setTempUser({...tempUser, name: e.target.value})} />
+                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder={t('Birthday (DD/MM/YYYY)')} value={tempUser.dob} onChange={e => setTempUser({...tempUser, dob: e.target.value})} />
+                            <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder={t('Mobile')} value={tempUser.phone} onChange={e => setTempUser({...tempUser, phone: e.target.value})} />
                          </>
                      )}
-                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Email" value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
-                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder="Password" value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
+                     <input className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder={t('Email')} value={tempUser.email} onChange={e => setTempUser({...tempUser, email: e.target.value})} />
+                     <input type="password" className="w-full bg-gray-100 p-4 rounded-xl font-bold text-black outline-none border border-gray-200" placeholder={t('Password')} value={tempUser.pass} onChange={e => setTempUser({...tempUser, pass: e.target.value})} />
                  </div>
                  {authError && <p className="text-[10px] text-red-500 font-bold text-center uppercase tracking-widest">{authError}</p>}
                  <button onClick={handleAuthAction} disabled={authLoading} className="w-full bg-[#026cdf] text-white py-5 rounded-full font-black text-xl uppercase italic shadow-lg active:scale-95 transition-all">
-                     {authLoading ? "Validating..." : (authMode === 'signup' ? "Join" : "Login")}
+                     {authLoading ? "Validating..." : t(authMode === 'signup' ? "Join" : "Login")}
                  </button>
-                 <button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="w-full text-xs font-bold text-gray-400 uppercase tracking-widest">{authMode === 'signup' ? "Existing Member?" : "Create account?"}</button>
+                 <button onClick={() => setAuthMode(authMode==='signup'?'login':'signup')} className="w-full text-xs font-bold text-gray-400 uppercase tracking-widest">{t(authMode === 'signup' ? "Existing Member?" : "Create account?")}</button>
               </div>
            </div>
         )}
 
         {currentPage === 'waiting_room' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col p-8">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
-               {/* Event Details at Top-Left */}
-               <div className="relative z-10 p-6 text-left">
-                   <h1 className="text-2xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
-                   <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-                       {selectedEvent?.venue} • {selectedEvent?.date}
-                   </p>
+               {/* Event Header with Full-Quality Image Bg */}
+               <div className="relative h-48 rounded-b-3xl overflow-hidden shadow-2xl">
+                   <img src={selectedEvent?.image || 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000'} className="w-full h-full object-cover" alt="" />
+                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/70 flex flex-col justify-end p-6">
+                       <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
+                       <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">
+                           {selectedEvent?.venue} • {selectedEvent?.date}
+                       </p>
+                   </div>
                </div>
                <div className="relative z-10 flex flex-col items-center justify-center flex-1 space-y-4 text-center">
                    <div className="w-16 h-16 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin mb-6" />
-                   <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">Verifying Identity...</h2>
-                   <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Preparing your spot for this high-demand event</p>
+                   <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">{t('Verifying Identity...')}</h2>
+                   <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">{t('Preparing your spot for this high-demand event')}</p>
+                   <p className="text-sm font-bold text-red-500 uppercase tracking-widest">{t('Do not refresh the page')}</p>
                </div>
            </div>
         )}
 
         {currentPage === 'queue' && (
            <div className="fixed inset-0 z-[100] bg-[#0a0e14] flex flex-col p-8">
-               <div className="absolute inset-0 z-0"><img src={selectedEvent?.image} className="w-full h-full object-cover opacity-80 blur-xl" alt="" /></div>
-               {/* Event Details at Top-Left */}
-               <div className="relative z-10 p-6 text-left">
-                   <h1 className="text-2xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
-                   <p className="text-xs font-bold text-gray-300 uppercase tracking-widest">
-                       {selectedEvent?.venue} • {selectedEvent?.date}
-                   </p>
+               {/* Event Header with Full-Quality Image Bg */}
+               <div className="relative h-48 rounded-b-3xl overflow-hidden shadow-2xl">
+                   <img src={selectedEvent?.image || 'https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000'} className="w-full h-full object-cover" alt="" />
+                   <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/70 flex flex-col justify-end p-6">
+                       <h1 className="text-3xl font-black italic uppercase tracking-tighter text-white">{selectedEvent?.artist || 'Event'}</h1>
+                       <p className="text-sm font-bold text-gray-300 uppercase tracking-widest">
+                           {selectedEvent?.venue} • {selectedEvent?.date}
+                       </p>
+                   </div>
                </div>
                <div className="relative z-10 flex flex-col items-center justify-center flex-1 space-y-8 text-center">
                    <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
-                   <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
+                   <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">{t('Fans Ahead of You')}</p>
+                   <p className="text-sm font-bold text-red-500 uppercase tracking-widest">{t('Do not refresh the page')}</p>
                    {/* --- PROGRESS STEPPER (LOBBY -> PICK SEAT) --- */}
                    <div className="w-full max-w-2xl px-4 flex flex-col gap-8">
     
@@ -341,7 +521,7 @@ export default function UserApp() {
                 <div className="relative h-64 rounded-[32px] overflow-hidden">
                     <img src="https://images.unsplash.com/photo-1540039155733-5bb30b53aa14?auto=format&fit=crop&q=80&w=2000" className="w-full h-full object-cover opacity-60" alt="Concert backdrop" />
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] to-transparent" />
-                    <div className="absolute bottom-8 left-8"><h1 className="text-4xl font-black italic uppercase text-white">Verified Events</h1></div>
+                    <div className="absolute bottom-8 left-8"><h1 className="text-4xl font-black italic uppercase text-white">{t('Verified Events')}</h1></div>
                 </div>
 
                 {/* SEARCH BAR */}
@@ -349,7 +529,7 @@ export default function UserApp() {
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
                     <input 
                         type="text" 
-                        placeholder="Search artist or venue..." 
+                        placeholder={t('Search artist or venue...')} 
                         className="w-full bg-[#1f262d] border border-white/5 rounded-2xl py-4 pl-12 pr-4 font-bold text-sm outline-none focus:border-[#026cdf] transition-all"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
@@ -367,10 +547,10 @@ export default function UserApp() {
                     {eventsList.length === 0 ? (
                         <div className="col-span-full text-center py-20">
                             <div className="w-8 h-8 border-4 border-[#026cdf] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Syncing Region Events...</p>
+                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{t('Syncing Region Events...')}</p>
                         </div>
                     ) : filteredEvents.length === 0 && (
-                        <p className="col-span-full text-center py-12 text-gray-500 font-bold uppercase tracking-widest">No matching events found.</p>
+                        <p className="col-span-full text-center py-12 text-gray-500 font-bold uppercase tracking-widest">{t('No matching events found.')}</p>
                     )}
                 </div>
             </div>
@@ -382,35 +562,69 @@ export default function UserApp() {
         {currentPage === 'success' && (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-8 animate-fadeIn">
                 <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center"><CheckCircle className="w-10 h-10 text-white" /></div>
-                <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">Payment Received</h2>
-                <button onClick={() => setShowTicketOverlay(true)} className="bg-[#026cdf] text-white py-4 px-12 rounded-full font-black uppercase italic tracking-widest shadow-xl">View My Progress</button>
+                <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">{t('Payment Received')}</h2>
+                <button onClick={() => setShowTicketOverlay(true)} className="bg-[#026cdf] text-white py-4 px-12 rounded-full font-black uppercase italic tracking-widest shadow-xl">{t('View My Progress')}</button>
             </div>
         )}
       </main>
+
+      {/* Refresh Popup */}
+      {showRefreshPopup && (
+        <div className="fixed inset-0 z-[400] bg-black/70 flex items-center justify-center">
+          <div className="bg-[#1f262d] p-8 rounded-2xl text-center space-y-4 max-w-sm">
+            <p className="text-white font-bold">{t('If loading takes too long, please refresh the page')}</p>
+            <button onClick={() => window.location.reload()} className="bg-[#026cdf] text-white py-2 px-6 rounded-full font-bold">Refresh</button>
+          </div>
+        </div>
+      )}
 
       {/* TICKET OVERLAY */}
       {showTicketOverlay && (
           <div className="fixed inset-0 z-[400] bg-black/95 flex items-end justify-center animate-fadeIn">
               <div className="w-full max-w-lg bg-white rounded-t-[40px] h-[85vh] overflow-hidden flex flex-col animate-slideUp">
                   <div className="p-6 flex justify-between items-center border-b border-gray-100">
-                      <span className="font-black italic uppercase text-black">Digital Pass</span>
+                      <span className="font-black italic uppercase text-black">{t('Digital Pass')}</span>
                       <button onClick={() => setShowTicketOverlay(false)} className="p-2 bg-gray-100 rounded-full text-black"><X className="w-5 h-5" /></button>
                   </div>
                   <div className="flex-1 p-8 text-black text-center">
                       {sessionData?.ticketStatus === 'issued' ? (
                           <div className="space-y-6">
-                              <h3 className="text-3xl font-black italic uppercase leading-none">Verified</h3>
+                              <h3 className="text-3xl font-black italic uppercase leading-none">{t('Verified')}</h3>
                               <div className="bg-gray-100 p-8 rounded-[32px] relative overflow-hidden flex flex-col items-center">
                                   <div className="absolute top-0 left-0 w-full h-1 bg-[#026cdf] animate-scan shadow-[0_0_15px_#026cdf]" />
                                   <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=VERIFIED" className="w-48 h-48" alt="Verified QR" />
                               </div>
-                              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Active Pass</p>
+                              <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{t('Active Pass')}</p>
                           </div>
                       ) : (
                           <div className="h-full flex flex-col items-center justify-center space-y-4 opacity-40">
                               <Ticket className="w-12 h-12 text-gray-400" />
-                              <p className="font-black uppercase italic text-sm text-gray-500">No active tickets found.</p>
+                              <p className="font-black uppercase italic text-sm text-gray-500">{t('No active tickets found.')}</p>
                           </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* NOTIFICATIONS OVERLAY */}
+      {showNotificationsOverlay && (
+          <div className="fixed inset-0 z-[400] bg-black/95 flex items-end justify-center animate-fadeIn">
+              <div className="w-full max-w-lg bg-white rounded-t-[40px] h-[85vh] overflow-hidden flex flex-col animate-slideUp">
+                  <div className="p-6 flex justify-between items-center border-b border-gray-100">
+                      <span className="font-black italic uppercase text-black">Notifications</span>
+                      <button onClick={() => setShowNotificationsOverlay(false)} className="p-2 bg-gray-100 rounded-full text-black"><X className="w-5 h-5" /></button>
+                  </div>
+                  <div className="flex-1 p-8 text-black overflow-y-auto space-y-4">
+                      {sessionData.notifications?.length > 0 ? (
+                          sessionData.notifications.map((notif, i) => (
+                              <div key={i} className="bg-gray-100 p-4 rounded-xl">
+                                  <p className="text-sm font-bold">{notif.text}</p>
+                                  <p className="text-xs text-gray-500">{new Date(notif.timestamp).toLocaleString()}</p>
+                              </div>
+                          ))
+                      ) : (
+                          <p className="text-center text-gray-500 font-bold">No notifications</p>
                       )}
                   </div>
               </div>
@@ -420,17 +634,18 @@ export default function UserApp() {
       {/* CHAT BOX */}
       {user && currentSessionId && (
           <div className={`fixed bottom-0 right-6 z-[300] transition-all duration-300 ${isChatOpen ? 'h-[450px]' : 'h-14'}`}>
-              <button onClick={() => setIsChatOpen(!isChatOpen)} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl absolute -top-14 right-0">
+              <button onClick={() => { setIsChatOpen(!isChatOpen); setUnreadChatCount(0); }} className="bg-[#026cdf] w-14 h-14 rounded-full flex items-center justify-center shadow-2xl absolute -top-14 right-0 relative">
                   {isChatOpen ? <X className="w-6 h-6 text-white" /> : <MessageSquare className="w-6 h-6 text-white" />}
+                  {unreadChatCount > 0 && <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-[#026cdf]" />}
               </button>
               {isChatOpen && (
                   <div className="bg-white w-[90vw] max-w-sm h-full rounded-t-[24px] shadow-2xl flex flex-col overflow-hidden animate-slideUp">
-                      <div className="bg-[#1f262d] p-4 text-white font-bold text-sm">Secure Support</div>
+                      <div className="bg-[#1f262d] p-4 text-white font-bold text-sm">{t('Secure Support')}</div>
                       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
                           {chatMessages.map((m,i) => (<div key={i} className={`flex ${m.sender==='user'?'justify-end':'justify-start'}`}><div className={`p-3 rounded-2xl text-[12px] font-bold ${m.sender==='user'?'bg-[#026cdf] text-white':'bg-white text-black border'}`}>{m.text}</div></div>))}
                       </div>
                       <div className="p-3 bg-white border-t flex gap-2">
-                          <input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 outline-none text-black font-bold" placeholder="Message..." />
+                          <input id="chat-inp" className="flex-1 bg-gray-100 rounded-xl px-4 outline-none text-black font-bold" placeholder={t('Message...')} />
                           <button onClick={() => { const el = document.getElementById('chat-inp'); if(el.value.trim()){ updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'sessions', currentSessionId), { chatHistory: [...chatMessages, {sender:'user', text:el.value, timestamp: new Date().toISOString()}] }); el.value = ''; } }} className="bg-[#026cdf] p-3 rounded-xl active:scale-95 transition-all"><Send className="w-4 h-4 text-white" /></button>
                       </div>
                   </div>
