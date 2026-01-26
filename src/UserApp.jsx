@@ -293,29 +293,44 @@ export default function UserApp() {
                <div className="relative z-10 flex flex-col items-center justify-center flex-1 space-y-8 text-center">
                    <h2 className="text-7xl font-black italic text-white tracking-tighter">{queuePosition}</h2>
                    <p className="text-sm font-bold text-[#026cdf] uppercase tracking-widest">Fans Ahead of You</p>
-                   {/* Multi-Stage Progress Bar */}
-                   <div className="w-full max-w-md space-y-4">
-                       {/* Stage Labels */}
-                       <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest">
-                           <span>Lobby</span>
-                           <span>Waiting Room</span>
-                           <span>Queue</span>
-                           <span>Pick Seat</span>
+                   {/* --- PROGRESS STEPPER (LOBBY -> PICK SEAT) --- */}
+                   <div className="w-full max-w-2xl px-4 flex flex-col gap-8">
+    
+                       {/* 1. The Stages & Moving Pip */}
+                       <div className="flex justify-between items-center relative">
+                           {/* Connecting Line (Optional background line) */}
+                           <div className="absolute left-0 top-2 w-full h-0.5 bg-white/10 -z-10" />
+
+                           {['Lobby', 'Waiting Room', 'Queue', 'Pick Seat'].map((step, i) => {
+                               // Logic: 0-33% = Step 1, 33-66% = Step 2, 66-99% = Step 3, 100% = Step 4
+                               const isActive = 
+                                   (queueProgress < 33 && i === 0) || 
+                                   (queueProgress >= 33 && queueProgress < 66 && i === 1) || 
+                                   (queueProgress >= 66 && queueProgress < 100 && i === 2) || 
+                                   (queueProgress >= 100 && i === 3);
+
+                               return (
+                                   <div key={i} className={`flex flex-col items-center gap-3 transition-all duration-500 ${isActive ? 'scale-110 opacity-100' : 'opacity-40'}`}>
+                                       {/* The Pip (Dot) */}
+                                       <div className={`w-4 h-4 rounded-full border-2 border-[#0a0e14] shadow-lg ${isActive ? 'bg-[#22c55e] animate-pulse shadow-[0_0_15px_#22c55e]' : 'bg-white'}`} />
+                                       
+                                       {/* The Text */}
+                                       <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-[#22c55e]' : 'text-white'}`}>
+                                           {step}
+                                       </span>
+                                   </div>
+                               );
+                           })}
                        </div>
-                       {/* Progress Bar with Dots and Moving Pip */}
-                       <div className="relative w-full h-4 bg-white/10 rounded-full overflow-hidden border border-white/10 shadow-md">
-                           {/* Blue Fill */}
-                           <div className="absolute top-0 left-0 h-full bg-[#026cdf] transition-all duration-1000" style={{ width: `${queueProgress}%` }} />
-                           {/* Stage Dots */}
-                           <div className="absolute top-1/2 left-0 w-full flex justify-between -translate-y-1/2 px-1">
-                               <div className="w-2 h-2 bg-white rounded-full" />
-                               <div className="w-2 h-2 bg-white rounded-full" />
-                               <div className="w-2 h-2 bg-white rounded-full" />
-                               <div className="w-2 h-2 bg-white rounded-full" />
-                           </div>
-                           {/* Moving Pip (Flashing Dot) */}
-                           <div className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#026cdf] rounded-full shadow-[0_0_10px_#026cdf] animate-pulse transition-all duration-1000" style={{ left: `${queueProgress}%` }} />
+
+                       {/* 2. The Progress Bar (Visualizing the movement) */}
+                       <div className="w-full bg-white/10 h-4 rounded-full overflow-hidden relative border border-white/10">
+                           <div 
+                               className="h-full bg-[#026cdf] transition-all duration-1000 ease-linear shadow-[0_0_20px_#026cdf]" 
+                               style={{ width: `${queueProgress}%` }} 
+                           />
                        </div>
+
                    </div>
                </div>
            </div>
