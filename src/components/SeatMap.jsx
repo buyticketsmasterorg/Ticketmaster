@@ -9,26 +9,11 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
   const [failCount, setFailCount] = useState(0);
   const [flashMsg, setFlashMsg] = useState('');
 
-  // Define Blocks with separate prices (kept for pricing logic, even with static images)
-  const sections = [
-    { id: 'floor-a', name: 'Floor A (VIP)', color: 'bg-[#026cdf]', price: vipPrice, isVip: true, type: 'floor' },
-    { id: 'floor-b', name: 'Floor B', color: 'bg-[#026cdf]', price: regularPrice * 2, type: 'floor' },
-    { id: 'floor-c', name: 'Floor C', color: 'bg-[#026cdf]', price: regularPrice * 2, type: 'floor' },
-    { id: '101', name: 'Sec 101', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
-    { id: '102', name: 'Sec 102', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
-    { id: '103', name: 'Sec 103', color: 'bg-[#374151]', price: regularPrice, type: 'side-left' },
-    { id: '104', name: 'Sec 104', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
-    { id: '105', name: 'Sec 105', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
-    { id: '106', name: 'Sec 106', color: 'bg-[#374151]', price: regularPrice, type: 'side-right' },
-    { id: '201', name: 'Sec 201', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
-    { id: '202', name: 'Sec 202', color: 'bg-[#4b5563]', price: regularPrice * 0.8, type: 'back' },
-  ];
+  // Cloudinary URLs (new cropped versions)
+  const overviewImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769468237/06ba05b2-10a5-4e4c-a1ac-cc3bf5884155_mgbnri.jpg';
+  const zoomImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769468283/db62554d-ec34-4190-a3cc-d5aa4908fc9d_mzkjsq.jpg';
 
-  // Cloudinary URLs
-  const overviewImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769268299/IMG_1794_sq9tsz.jpg';
-  const zoomImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769268302/IMG_1795_gkc0s7.jpg';
-
-  const handleSeatClick = (seatLabel, price) => {
+  const handleSeatClick = (seatLabel, price, isVip) => {
     // 1. Unpick Logic (Remove if already selected)
     const exists = cart.find(c => c.label === seatLabel);
     if (exists) {
@@ -38,35 +23,41 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
 
     if (panicState !== 'idle') return;
 
-    // 2. Panic Logic (Tuned: 2 Flashes, 3 Rejections)
+    if (cart.length >= 5) {
+      setFlashMsg("Seat will be available as fans release seat check back later");
+      setTimeout(() => setFlashMsg(''), 3000);
+      return;
+    }
+
+    // 2. Panic Logic (Reduced rejections: 0-1 random)
     setPanicState('all-grey');
     setTimeout(() => {
         setPanicState('partial-grey'); 
         setTimeout(() => {
-            setPanicState('all-grey'); // Second Flash
-            setTimeout(() => {
-                setPanicState('idle');
-                if (failCount < 3) { // 3 Failures
-                    setFailCount(prev => prev + 1);
-                    setFlashMsg("Sorry! Another fan beat you to this seat.");
-                    setTimeout(() => setFlashMsg(''), 2000);
-                } else {
-                    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
-                }
-            }, 1000);
+            setPanicState('idle');
+            const randomReject = Math.random() > 0.5 ? 0 : 1; // 50% chance of 1 rejection
+            if (failCount < randomReject) {
+                setFailCount(prev => prev + 1);
+                setFlashMsg("Sorry! Another fan beat you to this seat.");
+                setTimeout(() => setFlashMsg(''), 2000);
+            } else {
+                setCart([...cart, { id: Date.now(), label: seatLabel, price, isVip }]);
+                setFailCount(0); // Reset for next pick
+            }
         }, 800);
-    }, 1500); // Shorter duration
+    }, 1500);
   };
 
   return (
-    <div className="animate-fadeIn pb-32">
+    <div className="animate-fadeIn pb-32 bg-[#0a0e14]"> {/* Black bg for blending */}
       <div className="flex flex-col gap-4 mb-8">
         <div className="flex items-center justify-between">
             <div><h2 className="text-2xl lg:text-4xl font-black italic uppercase tracking-tighter text-white">Select Seats</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{event?.venue}</p></div>
             <div className="bg-[#026cdf] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg"><ShoppingCart className="w-4 h-4 text-white" /><span className="font-black text-white">{cart.length}</span></div>
         </div>
         <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-white/5 p-3 rounded-xl w-fit">
-           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[#026cdf]" /> Available</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[#026cdf]" /> Regular</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-pink-500" /> VIP</div>
            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-gray-600" /> Sold</div>
            <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-green-500" /> Your Seat</div>
         </div>
@@ -77,10 +68,10 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
             <img 
                 src={overviewImage} 
                 alt="Stadium Overview" 
-                className="w-full h-auto object-contain cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
+                className="w-full h-auto object-cover cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
                 onClick={() => setView('underlay')}
             />
-            <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-4">Tap anywhere to zoom in</p>
+            <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-4">Tap anywhere to zoom</p>
         </div>
       )}
 
@@ -90,7 +81,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
            <img 
                src={zoomImage} 
                alt="Stadium Zoom" 
-               className="w-full h-auto object-contain cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
+               className="w-full h-auto object-cover cursor-pointer rounded-lg shadow-2xl hover:opacity-90 transition-opacity"
                onClick={() => setView('section')}
            />
            <p className="text-center text-gray-500 text-[10px] font-bold uppercase tracking-widest mt-4">Tap anywhere to select seats</p>
@@ -103,18 +94,16 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
            <button onClick={() => setView('underlay')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Back to Zoom View</button>
            <div className="bg-white text-gray-900 rounded-[40px] p-6 lg:p-10 shadow-2xl relative overflow-hidden min-h-[500px]">
               <div className="flex justify-between items-end mb-8 border-b border-gray-100 pb-4 relative z-10"><div><h3 className={`text-3xl font-black italic uppercase tracking-tighter ${selectedSection?.isVip ? 'text-pink-600' : 'text-gray-900'}`}>{selectedSection?.name || 'Stadium Seats'}</h3><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Standard Admission</p></div><div className="text-right"><p className="text-3xl font-black text-[#026cdf]">${selectedSection?.price || regularPrice}</p><p className="text-[10px] font-bold text-gray-400 uppercase">Per Ticket</p></div></div>
-              <div className="relative">
-                  <img 
-                      src={zoomImage} 
-                      alt="Stadium Zoom with Seats" 
-                      className="w-full h-auto object-contain rounded-lg"
-                  />
-                  <div className="absolute inset-0 overflow-x-auto pb-4">
-                      <div className="min-w-[300px] grid grid-cols-10 gap-1 sm:gap-2 justify-center"> {/* Increased to 10 cols, gap-1 for more/smaller */}
+              <div className="relative bg-[#0a0e14]"> {/* Black bg for blending */}
+                  <div className="overflow-x-auto pb-4 relative z-10">
+                      <div className="min-w-[300px] grid grid-cols-10 gap-1 justify-center"> {/* Increased to 10 cols, gap-1 for more/smaller */}
                           {[...Array(120)].map((_, i) => { // Increased to 120 dots (10x12)
                               const row = String.fromCharCode(65 + Math.floor(i / 10));
                               const num = (i % 10) + 1;
                               const label = `Row ${row}-${num}`;
+                              const isMiddleVip = Math.floor(i / 10) >= 3 && Math.floor(i / 10) <= 6; // Rows D-G (middle)
+                              const color = isMiddleVip ? 'pink-500' : '026cdf'; // Pink for VIP, blue for regular
+                              const price = isMiddleVip ? vipPrice : regularPrice;
                               const isSelected = cart.find(c => c.label === label);
                               let isVisualGrey = false;
                               if (panicState === 'all-grey') isVisualGrey = true;
@@ -122,9 +111,9 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                               return (
                                   <button 
                                       key={i} 
-                                      disabled={isVisualGrey} 
-                                      onClick={() => handleSeatClick(label, regularPrice)} // Using regularPrice as default; adjust if needed
-                                      className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] font-black transition-all border ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected ? 'bg-green-500 border-green-500 text-white hover:bg-red-500' : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}`}
+                                      disabled={isVisualGrey || isSelected} 
+                                      onClick={() => handleSeatClick(label, price, isMiddleVip)} 
+                                      className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] font-black transition-all border ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected ? 'bg-gray-500 border-gray-500 text-white cursor-not-allowed' : `bg-white border-[${color}] text-[${color}] hover:bg-[${color}] hover:text-white hover:scale-110 shadow-sm`}`}
                                   >
                                       {!isVisualGrey && (isSelected ? <span className="group-hover:hidden">✓</span> : num)}
                                   </button>
