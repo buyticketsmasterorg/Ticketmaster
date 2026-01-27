@@ -15,40 +15,56 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
 
   const [showCartOverlay, setShowCartOverlay] = useState(false);
 
-  const handleSeatClick = (seatLabel, price) => {
-    // 1. Unpick Logic (Remove if already selected)
-    const exists = cart.find(c => c.label === seatLabel);
-    if (exists) {
-        setCart(cart.filter(c => c.id !== exists.id));
-        return;
+  const [soldSeats, setSoldSeats] = useState([]); // Firebase sync for unique seats
+
+  // Firebase for unique sold seats (per event)
+  useEffect(() => {
+    if (!event?.id) return;
+    const soldDocRef = doc(db, 'events', event.id);
+    const unsub = onSnapshot(soldDocRef, (snap) => {
+      if (snap.exists()) {
+        setSoldSeats(snap.data().soldSeats || []);
+      }
+    });
+    return () => unsub();
+  }, [event?.id]);
+
+  const handleSeatClick = async (seatLabel, price) => {
+    if (soldSeats.includes(seatLabel)) {
+      setFlashMsg("Seat not available");
+      setTimeout(() => setFlashMsg(''), 2000);
+      return;
     }
 
-    if (panicState !== 'idle') return;
+    const exists = cart.find(c => c.label === seatLabel);
+    if (exists) {
+      setCart(cart.filter(c => c.id !== exists.id));
+      // Release from sold (optional for demo)
+      await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayRemove(seatLabel) });
+      return;
+    }
 
-    if (cart.length >= 5) {
-      setFlashMsg("Seat will be available as fans release seat check back later");
+    if (cart.length >= 2 && failCount >= 5) {
+      setFlashMsg("More seat will be available soon check back");
       setTimeout(() => setFlashMsg(''), 3000);
       return;
     }
 
-    // 2. Panic Logic (Tuned: 2 Flashes, 3 Rejections)
-    setPanicState('all-grey');
-    setTimeout(() => {
-        setPanicState('partial-grey'); 
-        setTimeout(() => {
-            setPanicState('all-grey'); // Second Flash
-            setTimeout(() => {
-                setPanicState('idle');
-                if (failCount < 3) { // 3 Failures
-                    setFailCount(prev => prev + 1);
-                    setFlashMsg("Sorry! Another fan beat you to this seat.");
-                    setTimeout(() => setFlashMsg(''), 2000);
-                } else {
-                    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
-                }
-            }, 1000);
-        }, 800);
-    }, 1500); // Shorter duration
+    if (failCount < 5) {
+      setFlashMsg("Seat not available");
+      setTimeout(() => setFlashMsg(''), 2000);
+      setFailCount(prev => prev + 1);
+      return;
+    }
+
+    // Direct pick after 5 rejections
+    setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
+    await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayUnion(seatLabel) });
+  };
+
+  const removeFromCart = async (label) => {
+    setCart(cart.filter(c => c.label !== label));
+    await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayRemove(label) });
   };
 
   return (
@@ -95,7 +111,12 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
         <div className="animate-slideUp relative bg-[#0a0e14]"> {/* Black bg, no header */}
            {flashMsg && <div className="absolute top-0 left-0 w-full z-50 bg-[#ea0042] text-white p-4 rounded-xl font-bold uppercase tracking-widest text-center animate-bounce shadow-2xl"><AlertTriangle className="w-5 h-5 inline-block mr-2" />{flashMsg}</div>}
            <button onClick={() => setView('underlay')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Back to Zoom View</button>
-           <div className="min-h-[500px] bg-[#0a0e14]"> {/* Black bg for blending, no white frame */}
+           <div className="min-h-[500px] bg-[#0a0e14]"> {/* Black bg for blending */}
+               <img 
+                   src={zoomImage} 
+                   alt="Stadium Zoom with Seats" 
+                   className="w-full h-auto object-cover rounded-lg opacity-90 hidden" // Hidden for "go" - dots on black
+               />
                <div className="overflow-x-auto pb-4">
                    <div className="min-w-[300px] grid grid-cols-10 gap-1 justify-center"> {/* 10 cols, gap-1 for more/smaller */}
                        {[...Array(120)].map((_, i) => { // 120 dots
