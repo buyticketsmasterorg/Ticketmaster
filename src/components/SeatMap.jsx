@@ -178,7 +178,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
       color: '#64748b',
       price: regularPrice,
       dots: 15,
-      path: 'M 80,480 Q 400,590 720,480',
+      path: 'M 80,480 Q 400,590 720,480 Z',  // Added Z to close for isPointInFill
       textX: 400,
       textY: 540
     },
@@ -195,23 +195,65 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
     }
   ];
 
-  const getPointsAlongPath = (pathString, numPoints) => {
+  function getGridPointsInBBox(pathString, numPoints, padding = 0.05) {
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', pathString);
     svg.appendChild(path);
     document.body.appendChild(svg);
 
-    const length = path.getTotalLength();
+    const bbox = path.getBBox();
+    document.body.removeChild(svg);
+
+    const width = bbox.width;
+    const height = bbox.height;
+    const padX = width * padding;
+    const padY = height * padding;
+    const innerX = bbox.x + padX;
+    const innerY = bbox.y + padY;
+    const innerWidth = width - 2 * padX;
+    const innerHeight = height - 2 * padY;
+
+    const cols = Math.floor(Math.sqrt(numPoints));
+    const rows = Math.ceil(numPoints / cols);
+
+    const spacingX = innerWidth / (cols - 1 || 1);
+    const spacingY = innerHeight / (rows - 1 || 1);
+
     const points = [];
-    for (let i = 0; i < numPoints; i++) {
-      const point = path.getPointAtLength((i * length) / (numPoints - 1));
-      points.push({ x: point.x, y: point.y });
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (points.length >= numPoints) break;
+        let x = innerX + col * spacingX;
+        let y = innerY + row * spacingY;
+        // Add small jitter for natural look
+        x += (Math.random() - 0.5) * spacingX * 0.2;
+        y += (Math.random() - 0.5) * spacingY * 0.2;
+        // Check if point is inside path
+        const point = svg.createSVGPoint();
+        point.x = x;
+        point.y = y;
+        if (path.isPointInFill(point)) {
+          points.push({ x, y });
+        }
+      }
+      if (points.length >= numPoints) break;
     }
 
-    document.body.removeChild(svg);
+    // If not enough points, add random ones inside
+    while (points.length < numPoints) {
+      let x = innerX + Math.random() * innerWidth;
+      let y = innerY + Math.random() * innerHeight;
+      const point = svg.createSVGPoint();
+      point.x = x;
+      point.y = y;
+      if (path.isPointInFill(point)) {
+        points.push({ x, y });
+      }
+    }
+
     return points;
-  };
+  }
 
   return (
     <div className="min-h-screen pb-20 bg-[#0a0e14]">
@@ -221,7 +263,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           <span className="text-sm">{flashMsg}</span>
         </div>
       )}
-
       <div className="px-4 pt-6 pb-4">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -240,7 +281,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
             <span className="font-black text-white">{cart.length}</span>
           </button>
         </div>
-
         <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-white/5 p-3 rounded-xl w-fit flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-sm bg-[#026cdf]" />
@@ -260,7 +300,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </div>
         </div>
       </div>
-
       {view === 'overview' && (
         <div className="max-w-4xl mx-auto px-4 py-10">
           <img
@@ -274,7 +313,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </p>
         </div>
       )}
-
       {view === 'underlay' && (
         <div className="px-4 animate-slideUp">
           <button
@@ -295,7 +333,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </p>
         </div>
       )}
-
       {view === 'svg-arena' && (
         <div className="px-4 animate-slideUp">
           <button
@@ -349,7 +386,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </div>
         </div>
       )}
-
       {view === 'section' && selectedSection && (
         <div className="px-4 animate-slideUp min-h-screen bg-[#0a0e14]">
           <button
@@ -362,7 +398,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
             <ChevronLeft className="w-4 h-4" />
             Back to Arena View
           </button>
-
           <div className="w-full mb-20">
             <svg
               viewBox="0 0 800 600"
@@ -371,8 +406,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
             >
               {sections.map((section) => {
                 const isSelected = section.id === selectedSection;
-                const points = isSelected ? getPointsAlongPath(section.path, section.dots) : [];
-
+                const points = isSelected ? getGridPointsInBBox(section.path, section.dots) : [];
                 return (
                   <g key={section.id}>
                     <path
@@ -400,13 +434,11 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                     >
                       {section.name}
                     </text>
-
                     {isSelected &&
                       points.map((point, i) => {
                         const seatLabel = `${section.name}-${i + 1}`;
                         const isInCart = cart.find((c) => c.label === seatLabel);
                         const isSold = soldSeats.includes(seatLabel);
-
                         return (
                           <circle
                             key={i}
@@ -416,9 +448,9 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                             fill={isInCart ? '#22c55e' : isSold ? '#64748b' : 'white'}
                             stroke={isInCart ? '#16a34a' : isSold ? '#475569' : section.color}
                             strokeWidth="2"
-                            className={`${
+                            className={
                               isSold ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-125'
-                            } transition-transform`}
+                            }
                             onClick={() => handleSeatClick(seatLabel, section.price)}
                           />
                         );
@@ -430,7 +462,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </div>
         </div>
       )}
-
       {showCartOverlay && (
         <div className="fixed inset-0 z-[400] bg-black/95 flex items-end justify-center animate-fadeIn">
           <div className="w-full max-w-lg bg-[#0a0e14] rounded-t-3xl shadow-2xl max-h-[80vh] flex flex-col">
@@ -445,7 +476,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                 <X className="w-6 h-6" />
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto p-6">
               {cart.length === 0 ? (
                 <p className="text-center text-gray-500 py-12">Your cart is empty</p>
@@ -471,7 +501,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                 </div>
               )}
             </div>
-
             {cart.length > 0 && (
               <div className="p-6 border-t border-gray-800">
                 <div className="flex items-center justify-between mb-4">
@@ -494,7 +523,6 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </div>
         </div>
       )}
-
       {cart.length > 0 && view === 'section' && !showCartOverlay && (
         <button
           onClick={onCheckout}
