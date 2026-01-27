@@ -178,7 +178,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
       color: '#64748b',
       price: regularPrice,
       dots: 15,
-      path: 'M 80,480 Q 400,590 720,480 Z',  // Added Z to close for isPointInFill
+      path: 'M 80,480 Q 400,590 720,480 Z',
       textX: 400,
       textY: 540
     },
@@ -195,65 +195,15 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
     }
   ];
 
-  function getGridPointsInBBox(pathString, numPoints, padding = 0.05) {
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('d', pathString);
-    svg.appendChild(path);
-    document.body.appendChild(svg);
-
-    const bbox = path.getBBox();
-    document.body.removeChild(svg);
-
-    const width = bbox.width;
-    const height = bbox.height;
-    const padX = width * padding;
-    const padY = height * padding;
-    const innerX = bbox.x + padX;
-    const innerY = bbox.y + padY;
-    const innerWidth = width - 2 * padX;
-    const innerHeight = height - 2 * padY;
-
-    const cols = Math.floor(Math.sqrt(numPoints));
-    const rows = Math.ceil(numPoints / cols);
-
-    const spacingX = innerWidth / (cols - 1 || 1);
-    const spacingY = innerHeight / (rows - 1 || 1);
-
-    const points = [];
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        if (points.length >= numPoints) break;
-        let x = innerX + col * spacingX;
-        let y = innerY + row * spacingY;
-        // Add small jitter for natural look
-        x += (Math.random() - 0.5) * spacingX * 0.2;
-        y += (Math.random() - 0.5) * spacingY * 0.2;
-        // Check if point is inside path
-        const point = svg.createSVGPoint();
-        point.x = x;
-        point.y = y;
-        if (path.isPointInFill(point)) {
-          points.push({ x, y });
-        }
-      }
-      if (points.length >= numPoints) break;
+  const generateSeatGrid = (section) => {
+    const seats = [];
+    for (let i = 0; i < section.dots; i++) {
+      seats.push(`${section.name}-${i + 1}`);
     }
+    return seats;
+  };
 
-    // If not enough points, add random ones inside
-    while (points.length < numPoints) {
-      let x = innerX + Math.random() * innerWidth;
-      let y = innerY + Math.random() * innerHeight;
-      const point = svg.createSVGPoint();
-      point.x = x;
-      point.y = y;
-      if (path.isPointInFill(point)) {
-        points.push({ x, y });
-      }
-    }
-
-    return points;
-  }
+  const selectedSec = sections.find(sec => sec.id === selectedSection);
 
   return (
     <div className="min-h-screen pb-20 bg-[#0a0e14]">
@@ -334,7 +284,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
         </div>
       )}
       {view === 'svg-arena' && (
-        <div className="px-4 animate-slideUp">
+        <div className="px-4 animate-slideUp relative">
           <button
             onClick={() => setView('underlay')}
             className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"
@@ -346,16 +296,13 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
             <svg
               viewBox="0 0 800 600"
               xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-auto"
+              className="w-full h-auto pointer-events-auto"
             >
               {sections.map((section) => (
                 <g
                   key={section.id}
                   className="cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => {
-                    setSelectedSection(section.id);
-                    setView('section');
-                  }}
+                  onClick={() => setSelectedSection(section.id)}
                 >
                   <path
                     d={section.path}
@@ -384,82 +331,53 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
               ))}
             </svg>
           </div>
-        </div>
-      )}
-      {view === 'section' && selectedSection && (
-        <div className="px-4 animate-slideUp min-h-screen bg-[#0a0e14]">
-          <button
-            onClick={() => {
-              setView('svg-arena');
-              setSelectedSection(null);
-            }}
-            className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Back to Arena View
-          </button>
-          <div className="w-full mb-20">
-            <svg
-              viewBox="0 0 800 600"
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-full h-auto"
-            >
-              {sections.map((section) => {
-                const isSelected = section.id === selectedSection;
-                const points = isSelected ? getGridPointsInBBox(section.path, section.dots) : [];
-                return (
-                  <g key={section.id}>
-                    <path
-                      d={section.path}
-                      fill={section.color}
-                      stroke={isSelected ? 'white' : '#334155'}
-                      strokeWidth={isSelected ? '3' : '2'}
-                      opacity={isSelected ? '1' : '0.3'}
-                    />
-                    <text
-                      x={section.textX}
-                      y={section.textY}
-                      fill="white"
-                      fontWeight="900"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fontSize="12"
-                      letterSpacing="1"
-                      opacity={isSelected ? '1' : '0.3'}
-                      transform={
-                        section.rotate
-                          ? `rotate(${section.rotate} ${section.textX} ${section.textY})`
-                          : undefined
-                      }
-                    >
-                      {section.name}
-                    </text>
-                    {isSelected &&
-                      points.map((point, i) => {
-                        const seatLabel = `${section.name}-${i + 1}`;
-                        const isInCart = cart.find((c) => c.label === seatLabel);
-                        const isSold = soldSeats.includes(seatLabel);
-                        return (
-                          <circle
-                            key={i}
-                            cx={point.x}
-                            cy={point.y}
-                            r="4"
-                            fill={isInCart ? '#22c55e' : isSold ? '#64748b' : 'white'}
-                            stroke={isInCart ? '#16a34a' : isSold ? '#475569' : section.color}
-                            strokeWidth="2"
-                            className={
-                              isSold ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-125'
-                            }
-                            onClick={() => handleSeatClick(seatLabel, section.price)}
-                          />
-                        );
-                      })}
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
+          {/* Seat Grid Panel (non-SVG) */}
+          {selectedSection && selectedSec && (
+            <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+              <div className="bg-[#0a0e14] p-6 rounded-xl max-w-md w-full mx-4 shadow-2xl">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-white">{selectedSec.name}</h3>
+                  <button onClick={() => setSelectedSection(null)} className="text-gray-400">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+                <p className="text-sm text-gray-400 mb-4">Price: ${selectedSec.price.toFixed(2)} each</p>
+                <div 
+                  className="grid gap-2 mb-6"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(selectedSec.dots))}, minmax(0, 1fr))`,
+                  }}
+                >
+                  {generateSeatGrid(selectedSec).map((seatLabel) => {
+                    const isInCart = cart.find((c) => c.label === seatLabel);
+                    const isSold = soldSeats.includes(seatLabel);
+                    return (
+                      <div
+                        key={seatLabel}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold cursor-pointer transition-transform ${
+                          isInCart ? 'bg-green-500 hover:scale-110' :
+                          isSold ? 'bg-gray-600 cursor-not-allowed' :
+                          'bg-white hover:scale-110'
+                        }`}
+                        style={{ border: `2px solid ${isInCart ? '#16a34a' : isSold ? '#475569' : selectedSec.color}` }}
+                        onClick={() => !isSold && handleSeatClick(seatLabel, selectedSec.price)}
+                      >
+                        {seatLabel.split('-')[1]}
+                      </div>
+                    );
+                  })}
+                </div>
+                {cart.length > 0 && (
+                  <button
+                    onClick={onCheckout}
+                    className="w-full bg-[#026cdf] text-white py-3 rounded-full font-black uppercase tracking-widest hover:bg-[#0257c4]"
+                  >
+                    Proceed ({cart.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
       {showCartOverlay && (
@@ -523,7 +441,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
           </div>
         </div>
       )}
-      {cart.length > 0 && view === 'section' && !showCartOverlay && (
+      {cart.length > 0 && view === 'svg-arena' && !selectedSection && !showCartOverlay && (
         <button
           onClick={onCheckout}
           className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#026cdf] text-white py-4 px-12 rounded-full font-black uppercase italic tracking-widest shadow-xl hover:bg-[#0257c4] transition-all z-50"
