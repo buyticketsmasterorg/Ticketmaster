@@ -1,45 +1,86 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft, Info, ShoppingCart, AlertTriangle, Monitor } from 'lucide-react';
+import { getFirestore, doc, onSnapshot, arrayUnion, updateDoc, getDoc } from 'firebase/firestore';
+
+const db = getFirestore();
 
 export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, onCheckout }) {
-  const [view, setView] = useState('overview'); // overview (main img), underlay (zoom img), section (zoom + dots)
-  const [selectedSection, setSelectedSection] = useState(null);
-  
-  const [panicState, setPanicState] = useState('idle');
+  const [view, setView] = useState('overview'); // overview (main img), underlay (zoom img), section (dots)
+  const [isVipMode, setIsVipMode] = useState(false); // For VIP mode switch
+  const [soldSeats, setSoldSeats] = useState([]); // Firebase sync for unique seats
   const [flashMsg, setFlashMsg] = useState('');
+  const [showCartOverlay, setShowCartOverlay] = useState(false);
+  const [failCount, setFailCount] = useState(0);
 
-  // Cloudinary URLs (new cropped ones)
+  // Cloudinary URLs
   const overviewImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769468237/06ba05b2-10a5-4e4c-a1ac-cc3bf5884155_mgbnri.jpg';
   const zoomImage = 'https://res.cloudinary.com/dwqvtrd8p/image/upload/v1769468283/db62554d-ec34-4190-a3cc-d5aa4908fc9d_mzkjsq.jpg';
 
-  const [showCartOverlay, setShowCartOverlay] = useState(false);
+  // Firebase for unique sold seats (per event)
+  useEffect(() => {
+    if (!event?.id) return;
+    const soldDocRef = doc(db, 'events', event.id);
+    const unsub = onSnapshot(soldDocRef, (snap) => {
+      if (snap.exists()) {
+        setSoldSeats(snap.data().soldSeats || []);
+      }
+    });
+    return () => unsub();
+  }, [event?.id]);
 
-  const handleSeatClick = (seatLabel, price) => {
-    // 1. Unpick Logic (Remove if already selected)
-    const exists = cart.find(c => c.label === seatLabel);
-    if (exists) {
-        setCart(cart.filter(c => c.id !== exists.id));
-        return;
+  const handleSeatClick = async (seatLabel, price) => {
+    if (soldSeats.includes(seatLabel)) {
+      setFlashMsg("Seat not available");
+      setTimeout(() => setFlashMsg(''), 2000);
+      return;
     }
 
-    if (panicState !== 'idle') return;
+    const exists = cart.find(c => c.label === seatLabel);
+    if (exists) {
+      setCart(cart.filter(c => c.id !== exists.id));
+      // Release from sold (optional for demo)
+      await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayRemove(seatLabel) });
+      return;
+    }
 
-    if (cart.length >= 5) {
+    if (cart.length >= 2 && failCount >= 5) {
       setFlashMsg("More seat will be available soon check back");
       setTimeout(() => setFlashMsg(''), 3000);
       return;
     }
 
-    // No panic - direct add and turn grey
+    if (failCount < 5) {
+      setFlashMsg("Seat not available");
+      setTimeout(() => setFlashMsg(''), 2000);
+      setFailCount(prev => prev + 1);
+      return;
+    }
+
+    // Direct pick after 5 rejections
     setCart([...cart, { id: Date.now(), label: seatLabel, price }]);
+    await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayUnion(seatLabel) });
   };
 
-  const removeFromCart = (id) => {
-    setCart(cart.filter(c => c.id !== id));
+  const removeFromCart = async (label) => {
+    setCart(cart.filter(c => c.label !== label));
+    await updateDoc(doc(db, 'events', event.id), { soldSeats: arrayRemove(label) });
   };
 
   return (
     <div className="animate-fadeIn pb-32 bg-[#0a0e14]"> {/* Black bg for blending, no header */}
+      <div className="flex flex-col gap-4 mb-8">
+        <div className="flex items-center justify-between">
+            <div><h2 className="text-2xl lg:text-4xl font-black italic uppercase tracking-tighter text-white">Select Seats</h2><p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{event?.venue}</p></div>
+            <button onClick={() => setShowCartOverlay(true)} className="bg-[#026cdf] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg"><ShoppingCart className="w-4 h-4 text-white" /><span className="font-black text-white">{cart.length}</span></button>
+        </div>
+        <div className="flex gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400 bg-white/5 p-3 rounded-xl w-fit">
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-[#026cdf]" /> Regular</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-pink-500" /> VIP</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-gray-600" /> Sold</div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-sm bg-green-500" /> Your Seat</div>
+        </div>
+      </div>
+
       {view === 'overview' && (
         <div className="max-w-4xl mx-auto space-y-4 py-10">
             <img 
@@ -66,7 +107,7 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
       )}
 
       {view === 'section' && (
-        <div className="animate-slideUp relative bg-[#0a0e14]"> {/* Black bg, no header framing */}
+        <div className="animate-slideUp relative bg-[#0a0e14]"> {/* Black bg, no header */}
            {flashMsg && <div className="absolute top-0 left-0 w-full z-50 bg-[#ea0042] text-white p-4 rounded-xl font-bold uppercase tracking-widest text-center animate-bounce shadow-2xl"><AlertTriangle className="w-5 h-5 inline-block mr-2" />{flashMsg}</div>}
            <button onClick={() => setView('underlay')} className="mb-6 flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-white transition-colors"><ChevronLeft className="w-4 h-4" /> Back to Zoom View</button>
            <div className="relative overflow-hidden min-h-[500px] bg-[#0a0e14]"> {/* Black bg for blending */}
@@ -82,17 +123,18 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                            const num = (i % 10) + 1;
                            const label = `Row ${row}-${num}`;
                            const isSelected = cart.find(c => c.label === label);
+                           const isSold = soldSeats.includes(label);
                            let isVisualGrey = false;
                            if (panicState === 'all-grey') isVisualGrey = true;
                            else if (panicState === 'partial-grey') { if (i % 3 !== 0) isVisualGrey = true; }
                            return (
                                <button 
                                    key={i} 
-                                   disabled={isVisualGrey} 
-                                   onClick={() => handleSeatClick(label, regularPrice)} // Using regularPrice; adjust if VIP added
-                                   className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] font-black transition-all border ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected ? 'bg-gray-500 border-gray-500 text-white' : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}`}
+                                   disabled={isVisualGrey || isSelected || isSold} 
+                                   onClick={() => handleSeatClick(label, regularPrice)} 
+                                   className={`w-4 h-4 sm:w-6 sm:h-6 rounded-full flex items-center justify-center text-[6px] sm:text-[8px] font-black transition-all border ${isVisualGrey ? 'bg-gray-400 border-gray-400 text-transparent scale-90 cursor-not-allowed duration-300' : isSelected || isSold ? 'bg-gray-500 border-gray-500 text-white cursor-not-allowed' : 'bg-white border-[#026cdf] text-[#026cdf] hover:bg-[#026cdf] hover:text-white hover:scale-110 shadow-sm'}`}
                                >
-                                   {!isVisualGrey && (isSelected ? <span className="group-hover:hidden">✓</span> : num)}
+                                   {!isVisualGrey && (isSelected || isSold ? <span className="group-hover:hidden">✓</span> : num)}
                                </button>
                            );
                        })}
@@ -124,10 +166,10 @@ export default function SeatMap({ event, regularPrice, vipPrice, cart, setCart, 
                           cart.map((item) => (
                               <div key={item.id} className="bg-gray-100 p-4 rounded-xl flex justify-between items-center">
                                   <div>
-                                      <p className="text-sm font-bold">{item.label}</p>
+                                      <p className="text-sm font-bold">Seat Number: {item.label}</p>
                                       <p className="text-xs text-gray-500">${item.price}</p>
                                   </div>
-                                  <button onClick={() => removeFromCart(item.id)} className="text-red-500">Delete</button>
+                                  <button onClick={() => removeFromCart(item.label)} className="text-red-500">Delete</button>
                               </div>
                           ))
                       ) : (
